@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">MuseCraft</string>
+    <string name="tab_compose">Beste &amp; Söz</string>
+    <string name="tab_covers">Cover &amp; Vokal</string>
+    <string name="tab_artists">Sanal Sanatçı</string>
+    <string name="tab_video">Video Klip</string>
+    <string name="tab_library">Kütüphane</string>
+</resources>

@@ -1,0 +1,6 @@
+{
+  "name": "MuseCraft",
+  "description": "AI destekli şarkı sözü yazma, beste yapma, kadın/erkek vokal cover oluşturma, sanal avatar yaratma ve video klip storyboard stüdyosu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
