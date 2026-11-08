@@ -9,13 +9,21 @@ const EROQ_API_KEY = process.env.EROQ_API_KEY;
 const EROQ_API_URL = "https://eroq.ai/v1";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = "gemini-3.8-flash";
-const GEMINI_API_URL =
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+
+const GEMINI_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.5-flash-lite"
+];
+
+const GEMINI_MODEL = GEMINI_MODELS[0];
+const GEMINI_API_BASE =
+    "https://generativelanguage.googleapis.com/v1beta/models";
 
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
+// JSON RESPONSE READER
 async function readJsonResponse(response) {
     const text = await response.text();
 
@@ -29,6 +37,7 @@ async function readJsonResponse(response) {
     }
 }
 
+// ERROR MESSAGE READER
 function getErrorMessage(result, fallback) {
     if (!result) return fallback;
 
@@ -47,6 +56,7 @@ function getErrorMessage(result, fallback) {
     return fallback;
 }
 
+// HTTP URL CHECK
 function isHttpUrl(value) {
     if (typeof value !== "string") return false;
 
@@ -59,6 +69,7 @@ function isHttpUrl(value) {
     }
 }
 
+// FIND AUDIO URL
 function findAudioUrl(root) {
     const preferredKeys = [
         "audioUrl",
@@ -152,6 +163,7 @@ function findAudioUrl(root) {
     return search(root, 0);
 }
 
+// FIND EROQ JOB ID
 function findJobId(result) {
     if (!result || typeof result !== "object") {
         return null;
@@ -174,16 +186,107 @@ function findJobId(result) {
         null;
 }
 
+// NORMALIZE STATUS
 function normalizeStatus(value) {
     return String(value || "unknown").toLowerCase();
 }
 
-// GEMINI RETRY HELPER
+// WAIT HELPER
 function wait(milliseconds) {
     return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
-// GEMINI API REQUEST WITH AUTOMATIC RETRIES
+// GEMINI ERROR STATUS CHECK
+function isRetryableStatus(status) {
+    return [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+    ].includes(status);
+}
+
+// GEMINI TEXT EXTRACTION
+function extractGeminiText(result) {
+    const candidates = result.candidates || [];
+
+    if (!candidates.length) {
+        throw new Error(
+            "Gemini yanıtında içerik bulunamadı."
+        );
+    }
+
+    const firstCandidate = candidates[0];
+    const parts = firstCandidate.content?.parts || [];
+
+    const generatedText = parts
+        .filter(part => typeof part.text === "string")
+        .map(part => part.text)
+        .join("\n")
+        .trim();
+
+    if (!generatedText) {
+        const reason = firstCandidate.finishReason || "Bilinmiyor";
+
+        throw new Error(
+            "Gemini boş yanıt döndürdü. Bitiş nedeni: " + reason
+        );
+    }
+
+    return generatedText;
+}
+
+// GEMINI REQUEST TO ONE MODEL
+async function requestGeminiModel(prompt, model) {
+    const endpoint =
+        `${GEMINI_API_BASE}/${model}:generateContent` +
+        `?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+
+    const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            contents: [
+                {
+                    role: "user",
+                    parts: [
+                        {
+                            text: prompt
+                        }
+                    ]
+                }
+            ],
+            generationConfig: {
+                temperature: 0.7,
+                topP: 0.95,
+                maxOutputTokens: 8192
+            }
+        }),
+        signal: AbortSignal.timeout(35000)
+    });
+
+    const result = await readJsonResponse(response);
+
+    if (!response.ok) {
+        const error = new Error(
+            getErrorMessage(
+                result,
+                `Gemini API hatası: HTTP ${response.status}`
+            )
+        );
+
+        error.status = response.status;
+        throw error;
+    }
+
+    return extractGeminiText(result);
+}
+
+// GEMINI API WITH MODEL FALLBACK
 async function callGemini(prompt) {
     if (!GEMINI_API_KEY) {
         throw new Error(
@@ -191,151 +294,70 @@ async function callGemini(prompt) {
         );
     }
 
-    const maxAttempts = 4;
-    const retryableStatuses = [
-        408,
-        429,
-        500,
-        502,
-        503,
-        504
-    ];
-
     let lastError = null;
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    for (let index = 0; index < GEMINI_MODELS.length; index++) {
+        const model = GEMINI_MODELS[index];
+
+        console.log("GEMINI ATTEMPT:", {
+            attempt: index + 1,
+            totalModels: GEMINI_MODELS.length,
+            model: model
+        });
+
         try {
-            console.log("GEMINI ATTEMPT:", {
-                attempt,
-                maxAttempts,
-                model: GEMINI_MODEL
-            });
-
-            const response = await fetch(
-                `${GEMINI_API_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        contents: [
-                            {
-                                role: "user",
-                                parts: [
-                                    {
-                                        text: prompt
-                                    }
-                                ]
-                            }
-                        ],
-                        generationConfig: {
-                            temperature: 0.7,
-                            topP: 0.95,
-                            maxOutputTokens: 8192
-                        }
-                    }),
-                    signal: AbortSignal.timeout(120000)
-                }
-            );
-
-            const result = await readJsonResponse(response);
-
-            if (!response.ok) {
-                const message = getErrorMessage(
-                    result,
-                    `Gemini API hatası: HTTP ${response.status}`
-                );
-
-                const error = new Error(message);
-                error.status = response.status;
-
-                console.error("GEMINI API ERROR:", {
-                    attempt,
-                    status: response.status,
-                    message
-                });
-
-                if (
-                    !retryableStatuses.includes(response.status) ||
-                    attempt === maxAttempts
-                ) {
-                    throw error;
-                }
-
-                lastError = error;
-
-                const delay = Math.pow(2, attempt - 1) * 1000;
-
-                console.log("GEMINI RETRY WAIT:", {
-                    nextAttempt: attempt + 1,
-                    waitMilliseconds: delay
-                });
-
-                await wait(delay);
-                continue;
-            }
-
-            const candidates = result.candidates || [];
-
-            if (!candidates.length) {
-                throw new Error(
-                    "Gemini yanıtında içerik bulunamadı."
-                );
-            }
-
-            const firstCandidate = candidates[0];
-            const parts =
-                firstCandidate.content?.parts || [];
-
-            const generatedText = parts
-                .filter(part => typeof part.text === "string")
-                .map(part => part.text)
-                .join("\n")
-                .trim();
-
-            if (!generatedText) {
-                throw new Error(
-                    "Gemini boş metin döndürdü."
-                );
-            }
+            const generatedText =
+                await requestGeminiModel(prompt, model);
 
             console.log("GEMINI SUCCESS:", {
-                attempt,
+                model: model,
                 responseLength: generatedText.length
             });
 
-            return generatedText;
+            return {
+                text: generatedText,
+                model: model
+            };
 
         } catch (error) {
             lastError = error;
 
-            const isRetryable =
-                retryableStatuses.includes(error.status) ||
+            console.error("GEMINI MODEL ERROR:", {
+                model: model,
+                status: error.status || null,
+                name: error.name,
+                message: error.message
+            });
+
+            const retryable =
+                isRetryableStatus(error.status) ||
                 error.name === "TimeoutError" ||
                 error.name === "AbortError" ||
                 error.name === "TypeError";
 
-            if (!isRetryable || attempt === maxAttempts) {
+            if (!retryable) {
                 throw error;
             }
 
-            const delay = Math.pow(2, attempt - 1) * 1000;
+            if (index < GEMINI_MODELS.length - 1) {
+                console.log("GEMINI FALLBACK:", {
+                    failedModel: model,
+                    nextModel: GEMINI_MODELS[index + 1]
+                });
 
-            console.log("GEMINI CONNECTION RETRY:", {
-                attempt,
-                nextAttempt: attempt + 1,
-                waitMilliseconds: delay,
-                message: error.message
-            });
-
-            await wait(delay);
+                await wait(800);
+            }
         }
     }
 
-    throw lastError || new Error(
-        "Gemini isteği tüm denemelerde başarısız oldu."
+    const finalError = new Error(
+        "Gemini modellerinin tamamı yanıt veremedi. Son hata: " +
+        (lastError?.message || "Bilinmeyen hata")
     );
+
+    finalError.status = lastError?.status || 503;
+
+    throw finalError;
 }
 
 // SERVER INFORMATION
@@ -345,7 +367,8 @@ app.get("/", (req, res) => {
         status: "online",
         engines: {
             music: "eroq-music-one",
-            textAI: GEMINI_MODEL
+            textAI: GEMINI_MODEL,
+            fallbackModels: GEMINI_MODELS
         },
         endpoints: [
             "/health",
@@ -362,7 +385,8 @@ app.get("/health", (req, res) => {
         ok: true,
         server: "MuseCraft",
         eroqConfigured: Boolean(EROQ_API_KEY),
-        geminiConfigured: Boolean(GEMINI_API_KEY)
+        geminiConfigured: Boolean(GEMINI_API_KEY),
+        geminiModels: GEMINI_MODELS
     });
 });
 
@@ -395,21 +419,21 @@ app.post("/api/gemini/generate", async (req, res) => {
         }
 
         console.log("GEMINI REQUEST:", {
-            model: GEMINI_MODEL,
+            primaryModel: GEMINI_MODEL,
             promptLength: prompt.length
         });
 
-        const generatedText = await callGemini(prompt);
+        const result = await callGemini(prompt);
 
         console.log("GEMINI RESPONSE:", {
-            model: GEMINI_MODEL,
-            responseLength: generatedText.length
+            model: result.model,
+            responseLength: result.text.length
         });
 
         return res.json({
             ok: true,
-            model: GEMINI_MODEL,
-            text: generatedText
+            model: result.model,
+            text: result.text
         });
 
     } catch (error) {
@@ -660,5 +684,7 @@ app.listen(PORT, "0.0.0.0", () => {
     );
 
     console.log("Eroq Music One integration ready.");
+    console.log("Gemini primary model:", GEMINI_MODEL);
+    console.log("Gemini fallback models:", GEMINI_MODELS.join(", "));
     console.log("Gemini integration ready:", Boolean(GEMINI_API_KEY));
 });
