@@ -1,3 +1,4 @@
+
 package com.example.ui.screens
 
 import androidx.compose.foundation.Image
@@ -26,9 +27,6 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Face
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -55,8 +53,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
-import com.example.model.MusicGenre
-import com.example.model.VirtualArtist
 import com.example.model.VocalGender
 import com.example.ui.components.GenreSelectorChips
 import com.example.ui.theme.NeonAmber
@@ -83,6 +79,11 @@ fun VirtualArtistScreen(
     val isGenerating by viewModel.isGeneratingArtist.collectAsState()
     val generatedResult by viewModel.generatedArtist.collectAsState()
     val allArtists by viewModel.allArtists.collectAsState()
+    val generationMessage by viewModel.generationMessage.collectAsState()
+
+    val artistError = generationMessage.takeIf {
+        it.startsWith("Sanatçı oluşturma hatası:")
+    }
 
     val visualStyles = listOf(
         "Cyberpunk Hologram",
@@ -99,31 +100,40 @@ fun VirtualArtistScreen(
             .padding(bottom = 72.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                colors = CardDefaults.cardColors(
+                    containerColor = StudioCardBg
+                )
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Face,
                             contentDescription = null,
                             tint = NeonCyan,
                             modifier = Modifier.size(24.dp)
                         )
+
                         Spacer(modifier = Modifier.width(8.dp))
+
                         Text(
                             text = "SANAL AI SANATÇI & KARAKTER YARATICI",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
                             color = TextPrimary
                         )
                     }
+
                     Spacer(modifier = Modifier.height(4.dp))
+
                     Text(
                         text = "Kendi sanal pop yıldızını, rock grubunu veya sanal avatarını üret, hikayesini ve sahne imajını belirle.",
                         style = MaterialTheme.typography.bodySmall,
@@ -133,29 +143,41 @@ fun VirtualArtistScreen(
             }
         }
 
-        // Artist Name & Identity
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                colors = CardDefaults.cardColors(
+                    containerColor = StudioCardBg
+                )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "Sanal Sanatçı İsmi",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
                         color = TextPrimary
                     )
+
                     Spacer(modifier = Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = artistName,
-                        onValueChange = { viewModel.artistName.value = it },
+                        onValueChange = {
+                            viewModel.artistName.value = it
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("artist_name_input"),
-                        placeholder = { Text("Örn: NOVA, KRONOS, AURA-7, SelenAI...", color = TextMuted) },
+                        placeholder = {
+                            Text(
+                                "Örn: NOVA, KRONOS, AURA-7, SelenAI...",
+                                color = TextMuted
+                            )
+                        },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = NeonCyan,
                             unfocusedBorderColor = StudioSurfaceVariant,
@@ -172,6 +194,7 @@ fun VirtualArtistScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary
                     )
+
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Row(
@@ -182,15 +205,32 @@ fun VirtualArtistScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (artistGender == VocalGender.FEMALE) NeonMagenta else StudioSurfaceVariant)
-                                .clickable { viewModel.artistGender.value = VocalGender.FEMALE }
+                                .background(
+                                    if (artistGender == VocalGender.FEMALE) {
+                                        NeonMagenta
+                                    } else {
+                                        StudioSurfaceVariant
+                                    }
+                                )
+                                .clickable {
+                                    viewModel.artistGender.value =
+                                        VocalGender.FEMALE
+                                }
                                 .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "👩‍🎤 Kadın Sanatçı",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                color = if (artistGender == VocalGender.FEMALE) Color.White else TextSecondary
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = if (
+                                    artistGender == VocalGender.FEMALE
+                                ) {
+                                    Color.White
+                                } else {
+                                    TextSecondary
+                                }
                             )
                         }
 
@@ -198,15 +238,32 @@ fun VirtualArtistScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (artistGender == VocalGender.MALE) NeonCyan else StudioSurfaceVariant)
-                                .clickable { viewModel.artistGender.value = VocalGender.MALE }
+                                .background(
+                                    if (artistGender == VocalGender.MALE) {
+                                        NeonCyan
+                                    } else {
+                                        StudioSurfaceVariant
+                                    }
+                                )
+                                .clickable {
+                                    viewModel.artistGender.value =
+                                        VocalGender.MALE
+                                }
                                 .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "👨‍🎤 Erkek Sanatçı",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                color = if (artistGender == VocalGender.MALE) Color.Black else TextSecondary
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = if (
+                                    artistGender == VocalGender.MALE
+                                ) {
+                                    Color.Black
+                                } else {
+                                    TextSecondary
+                                }
                             )
                         }
                     }
@@ -214,30 +271,41 @@ fun VirtualArtistScreen(
             }
         }
 
-        // Genre Selector
         item {
             Column {
                 Text(
                     text = "Sanatçının Ana Müzik Türü",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
                     color = TextPrimary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(
+                        horizontal = 16.dp,
+                        vertical = 4.dp
+                    )
                 )
+
                 GenreSelectorChips(
                     selectedGenre = artistGenre,
-                    onSelectGenre = { viewModel.artistGenre.value = it }
+                    onSelectGenre = {
+                        viewModel.artistGenre.value = it
+                    }
                 )
             }
         }
 
-        // Visual Style Selector
         item {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Görsel Sahne Tarzı & Estetik",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
                     color = TextPrimary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(
+                        horizontal = 16.dp,
+                        vertical = 4.dp
+                    )
                 )
 
                 LazyRow(
@@ -247,24 +315,48 @@ fun VirtualArtistScreen(
                 ) {
                     items(visualStyles) { style ->
                         val isSelected = style == artistVisualStyle
+
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) NeonViolet else StudioCardBg)
+                                .background(
+                                    if (isSelected) {
+                                        NeonViolet
+                                    } else {
+                                        StudioCardBg
+                                    }
+                                )
                                 .border(
                                     1.dp,
-                                    if (isSelected) NeonCyan else StudioSurfaceVariant,
+                                    if (isSelected) {
+                                        NeonCyan
+                                    } else {
+                                        StudioSurfaceVariant
+                                    },
                                     RoundedCornerShape(12.dp)
                                 )
-                                .clickable { viewModel.artistVisualStyle.value = style }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .clickable {
+                                    viewModel.artistVisualStyle.value = style
+                                }
+                                .padding(
+                                    horizontal = 12.dp,
+                                    vertical = 8.dp
+                                )
                         ) {
                             Text(
                                 text = style,
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    fontWeight = if (isSelected) {
+                                        FontWeight.Bold
+                                    } else {
+                                        FontWeight.Normal
+                                    }
                                 ),
-                                color = if (isSelected) Color.White else TextSecondary
+                                color = if (isSelected) {
+                                    Color.White
+                                } else {
+                                    TextSecondary
+                                }
                             )
                         }
                     }
@@ -272,7 +364,6 @@ fun VirtualArtistScreen(
             }
         }
 
-        // Generate Artist Action
         item {
             Box(
                 modifier = Modifier
@@ -280,14 +371,18 @@ fun VirtualArtistScreen(
                     .padding(horizontal = 16.dp)
             ) {
                 Button(
-                    onClick = { viewModel.generateArtist() },
+                    onClick = {
+                        viewModel.generateArtist()
+                    },
                     enabled = !isGenerating,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp)
                         .testTag("generate_artist_button"),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Transparent
+                    ),
                     contentPadding = PaddingValues(0.dp)
                 ) {
                     Box(
@@ -295,37 +390,53 @@ fun VirtualArtistScreen(
                             .fillMaxSize()
                             .background(
                                 Brush.horizontalGradient(
-                                    listOf(NeonCyan, NeonViolet, NeonMagenta)
+                                    listOf(
+                                        NeonCyan,
+                                        NeonViolet,
+                                        NeonMagenta
+                                    )
                                 )
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         if (isGenerating) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 CircularProgressIndicator(
                                     color = Color.White,
                                     modifier = Modifier.size(20.dp),
                                     strokeWidth = 2.dp
                                 )
+
                                 Spacer(modifier = Modifier.width(10.dp))
+
                                 Text(
                                     text = "AI Sanal Karakter Oluşturuluyor...",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
                                     color = Color.White
                                 )
                             }
                         } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.AutoAwesome,
                                     contentDescription = null,
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp)
                                 )
+
                                 Spacer(modifier = Modifier.width(8.dp))
+
                                 Text(
                                     text = "AI İLE SANAL SANATÇI YARAT",
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
                                     color = Color.White
                                 )
                             }
@@ -335,9 +446,55 @@ fun VirtualArtistScreen(
             }
         }
 
-        // Generated Artist Preview Card
+        if (isGenerating) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = NeonCyan,
+                        strokeWidth = 2.dp
+                    )
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Text(
+                        text = "Gemini sunucusundan yanıt bekleniyor...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NeonCyan
+                    )
+                }
+            }
+        }
+
+        if (artistError != null) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = NeonMagenta.copy(alpha = 0.12f)
+                    )
+                ) {
+                    Text(
+                        text = artistError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NeonMagenta,
+                        modifier = Modifier.padding(14.dp)
+                    )
+                }
+            }
+        }
+
         if (generatedResult != null) {
             val artist = generatedResult!!
+
             item {
                 Card(
                     modifier = Modifier
@@ -345,23 +502,27 @@ fun VirtualArtistScreen(
                         .padding(horizontal = 16.dp)
                         .border(
                             1.dp,
-                            Brush.horizontalGradient(listOf(NeonCyan, NeonMagenta)),
+                            Brush.horizontalGradient(
+                                listOf(NeonCyan, NeonMagenta)
+                            ),
                             RoundedCornerShape(20.dp)
                         ),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                    colors = CardDefaults.cardColors(
+                        containerColor = StudioCardBg
+                    )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Avatar Image
-                            val avatarRes = if (artistGender == VocalGender.FEMALE) {
-                                R.drawable.img_virtual_female_artist
-                            } else {
-                                R.drawable.img_virtual_male_artist
-                            }
+                            val avatarRes =
+                                if (artistGender == VocalGender.FEMALE) {
+                                    R.drawable.img_virtual_female_artist
+                                } else {
+                                    R.drawable.img_virtual_male_artist
+                                }
 
                             Image(
                                 painter = painterResource(id = avatarRes),
@@ -375,17 +536,23 @@ fun VirtualArtistScreen(
 
                             Spacer(modifier = Modifier.width(14.dp))
 
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
                                 Text(
                                     text = artistName,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
                                     color = TextPrimary
                                 )
+
                                 Text(
                                     text = artist.stageTitle,
                                     style = MaterialTheme.typography.labelMedium,
                                     color = NeonAmber
                                 )
+
                                 Text(
                                     text = "${artistGenre.displayName} • $artistVisualStyle",
                                     style = MaterialTheme.typography.bodySmall,
@@ -394,10 +561,17 @@ fun VirtualArtistScreen(
                             }
 
                             Button(
-                                onClick = { viewModel.saveGeneratedArtist() },
-                                colors = ButtonDefaults.buttonColors(containerColor = NeonGreen.copy(alpha = 0.2f)),
+                                onClick = {
+                                    viewModel.saveGeneratedArtist()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = NeonGreen.copy(alpha = 0.2f)
+                                ),
                                 shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                contentPadding = PaddingValues(
+                                    horizontal = 10.dp,
+                                    vertical = 6.dp
+                                ),
                                 modifier = Modifier.testTag("save_artist_btn")
                             ) {
                                 Icon(
@@ -406,14 +580,19 @@ fun VirtualArtistScreen(
                                     tint = NeonGreen,
                                     modifier = Modifier.size(16.dp)
                                 )
+
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Kaydet", color = NeonGreen, fontSize = 12.sp)
+
+                                Text(
+                                    "Kaydet",
+                                    color = NeonGreen,
+                                    fontSize = 12.sp
+                                )
                             }
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Bio
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -422,15 +601,24 @@ fun VirtualArtistScreen(
                                 .padding(12.dp)
                         ) {
                             Column {
-                                Text("📖 Sanatçı Biyografisi:", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                Text(
+                                    "📖 Sanatçı Biyografisi:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
+
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text(artist.bio, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+
+                                Text(
+                                    artist.bio,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextPrimary
+                                )
                             }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // Signature Look
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -439,9 +627,19 @@ fun VirtualArtistScreen(
                                 .padding(12.dp)
                         ) {
                             Column {
-                                Text("✨ Sahne İmajı & Aksesuarlar:", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                Text(
+                                    "✨ Sahne İmajı & Aksesuarlar:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
+
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text(artist.signatureLook, style = MaterialTheme.typography.bodySmall, color = NeonCyan)
+
+                                Text(
+                                    artist.signatureLook,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NeonCyan
+                                )
                             }
                         }
                     }
@@ -449,14 +647,18 @@ fun VirtualArtistScreen(
             }
         }
 
-        // Saved Artists List
         if (allArtists.isNotEmpty()) {
             item {
                 Text(
                     text = "Kayıtlı Sanal Müzisyenler (${allArtists.size})",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
                     color = TextPrimary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(
+                        horizontal = 16.dp,
+                        vertical = 4.dp
+                    )
                 )
             }
 
@@ -466,7 +668,9 @@ fun VirtualArtistScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                    colors = CardDefaults.cardColors(
+                        containerColor = StudioCardBg
+                    )
                 ) {
                     Row(
                         modifier = Modifier
@@ -474,11 +678,15 @@ fun VirtualArtistScreen(
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val avatarRes = if (artistItem.gender == "FEMALE" || artistItem.avatarDrawableRes.contains("female")) {
-                            R.drawable.img_virtual_female_artist
-                        } else {
-                            R.drawable.img_virtual_male_artist
-                        }
+                        val avatarRes =
+                            if (
+                                artistItem.gender == "FEMALE" ||
+                                artistItem.avatarDrawableRes.contains("female")
+                            ) {
+                                R.drawable.img_virtual_female_artist
+                            } else {
+                                R.drawable.img_virtual_male_artist
+                            }
 
                         Image(
                             painter = painterResource(id = avatarRes),
@@ -486,23 +694,37 @@ fun VirtualArtistScreen(
                             modifier = Modifier
                                 .size(50.dp)
                                 .clip(CircleShape)
-                                .border(1.5.dp, if (artistItem.gender == "FEMALE") NeonMagenta else NeonCyan, CircleShape),
+                                .border(
+                                    1.5.dp,
+                                    if (artistItem.gender == "FEMALE") {
+                                        NeonMagenta
+                                    } else {
+                                        NeonCyan
+                                    },
+                                    CircleShape
+                                ),
                             contentScale = ContentScale.Crop
                         )
 
                         Spacer(modifier = Modifier.width(12.dp))
 
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Text(
                                 text = artistItem.name,
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
                                 color = TextPrimary
                             )
+
                             Text(
                                 text = artistItem.stageTitle,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = NeonAmber
                             )
+
                             Text(
                                 text = "${artistItem.genre} • ${artistItem.visualStyle}",
                                 style = MaterialTheme.typography.bodySmall,
@@ -511,7 +733,11 @@ fun VirtualArtistScreen(
                             )
                         }
 
-                        IconButton(onClick = { viewModel.deleteArtist(artistItem) }) {
+                        IconButton(
+                            onClick = {
+                                viewModel.deleteArtist(artistItem)
+                            }
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Sil",
