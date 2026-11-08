@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
@@ -57,7 +58,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.model.SongItem
 import com.example.ui.components.AudioVisualizerWaveform
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
@@ -85,6 +85,9 @@ fun LibraryScreen(
     val amplitudes by viewModel.visualizerAmplitudes.collectAsState()
     val playbackError by viewModel.audioPlaybackError.collectAsState()
 
+    val downloadingSongId by viewModel.downloadingSongId.collectAsState()
+    val downloadMessage by viewModel.downloadMessage.collectAsState()
+
     var selectedTabIdx by remember { mutableIntStateOf(0) }
     var expandedSongId by remember { mutableStateOf<String?>(null) }
 
@@ -105,7 +108,6 @@ fun LibraryScreen(
             .padding(bottom = 72.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // LIBRARY HEADER
         item {
             Card(
                 modifier = Modifier
@@ -157,11 +159,20 @@ fun LibraryScreen(
                         ),
                         color = NeonCyan
                     )
+
+                    if (!downloadMessage.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = downloadMessage.orEmpty(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NeonGreen
+                        )
+                    }
                 }
             }
         }
 
-        // TABS
         item {
             TabRow(
                 selectedTabIndex = selectedTabIdx,
@@ -205,7 +216,6 @@ fun LibraryScreen(
             }
         }
 
-        // EMPTY LIBRARY
         if (filteredSongs.isEmpty()) {
             item {
                 Box(
@@ -258,9 +268,14 @@ fun LibraryScreen(
                 val isExpanded =
                     expandedSongId == song.id
 
+                val isDownloading =
+                    downloadingSongId == song.id
+
+                val isDownloaded =
+                    !song.audioFilePath.isNullOrBlank()
+
                 val hasRealAudio =
-                    !song.audioUrl.isNullOrBlank() ||
-                        !song.audioFilePath.isNullOrBlank()
+                    !song.audioUrl.isNullOrBlank() || isDownloaded
 
                 Card(
                     modifier = Modifier
@@ -295,7 +310,6 @@ fun LibraryScreen(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // REAL MP3 PLAY / PAUSE
                             IconButton(
                                 onClick = {
                                     if (isThisPlaying) {
@@ -400,7 +414,7 @@ fun LibraryScreen(
                                         )
 
                                         Text(
-                                            text = if (!song.audioFilePath.isNullOrBlank()) {
+                                            text = if (isDownloaded) {
                                                 "MP3 dosyası kayıtlı"
                                             } else {
                                                 "Gerçek MP3 bağlantısı mevcut"
@@ -418,8 +432,32 @@ fun LibraryScreen(
                                 }
                             }
 
-                            // COPY AND DELETE
                             Row {
+                                if (!isDownloaded &&
+                                    !song.audioUrl.isNullOrBlank()
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.downloadSong(song)
+                                        },
+                                        enabled = !isDownloading
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.FileDownload,
+                                            contentDescription = if (isDownloading) {
+                                                "MP3 indiriliyor"
+                                            } else {
+                                                "MP3 indir"
+                                            },
+                                            tint = if (isDownloading) {
+                                                NeonAmber
+                                            } else {
+                                                NeonCyan
+                                            }
+                                        )
+                                    }
+                                }
+
                                 IconButton(
                                     onClick = {
                                         val clipboard =
@@ -464,7 +502,16 @@ fun LibraryScreen(
                             }
                         }
 
-                        // PLAYING VISUALIZER
+                        if (isDownloading) {
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = "MP3 indiriliyor...",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = NeonAmber
+                            )
+                        }
+
                         if (isThisPlaying) {
                             Spacer(modifier = Modifier.height(10.dp))
 
@@ -474,7 +521,6 @@ fun LibraryScreen(
                             )
                         }
 
-                        // EXPANDED SONG DETAILS
                         if (isExpanded) {
                             Spacer(modifier = Modifier.height(12.dp))
 
