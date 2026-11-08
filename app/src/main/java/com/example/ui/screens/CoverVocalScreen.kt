@@ -1,4 +1,3 @@
-
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
@@ -25,8 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -55,7 +52,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.components.AudioVisualizerWaveform
 import com.example.ui.components.GenreSelectorChips
 import com.example.ui.components.VocalToneSelectorCard
 import com.example.ui.theme.NeonCyan
@@ -81,11 +77,7 @@ fun CoverVocalScreen(
 
     val isGenerating by viewModel.isGeneratingCover.collectAsState()
     val generatedCover by viewModel.generatedCover.collectAsState()
-    val generatedAudioUrl by viewModel.generatedCoverAudioUrl.collectAsState()
     val coverMessage by viewModel.coverMessage.collectAsState()
-
-    val isPlaying by viewModel.audioEngine.isPlaying.collectAsState()
-    val amplitudes by viewModel.audioEngine.visualizerAmplitudes.collectAsState()
 
     var autotuneLevel by remember { mutableStateOf(65f) }
     var reverbLevel by remember { mutableStateOf(50f) }
@@ -110,7 +102,9 @@ fun CoverVocalScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                colors = CardDefaults.cardColors(
+                    containerColor = StudioCardBg
+                )
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -120,7 +114,9 @@ fun CoverVocalScreen(
                             tint = NeonMagenta,
                             modifier = Modifier.size(24.dp)
                         )
+
                         Spacer(modifier = Modifier.width(8.dp))
+
                         Text(
                             text = "AI COVER & VOKAL STÜDYOSU",
                             style = MaterialTheme.typography.titleMedium.copy(
@@ -133,7 +129,7 @@ fun CoverVocalScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "Bir şarkı temasını yeni müzik türü ve AI vokalle yeniden yorumla.",
+                        text = "Bir şarkı temasını yeni müzik türü ve vokal düzeniyle yeniden yorumla. Gemini şarkı sözlerini ve aranje notlarını hazırlar.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -147,7 +143,9 @@ fun CoverVocalScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                colors = CardDefaults.cardColors(
+                    containerColor = StudioCardBg
+                )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -313,7 +311,7 @@ fun CoverVocalScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Cover'ı Kendi Sesinle Söylet",
+                                text = "Kendi Sesini Kaydet",
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold
                                 ),
@@ -346,9 +344,9 @@ fun CoverVocalScreen(
 
                         Text(
                             text = if (hasRecordedUserVoice) {
-                                "Kaydedilmiş ses modelin hazır."
+                                "Ses kaydın mevcut. Bu Gemini Cover akışında ses klonlama henüz kullanılmıyor."
                             } else {
-                                "Kendi sesini kaydetmek için bu alanı kullanabilirsin."
+                                "Ses kaydı özelliği mevcut; Gemini Cover üretiminde henüz kullanılmıyor."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
@@ -372,7 +370,11 @@ fun CoverVocalScreen(
                         modifier = Modifier.testTag("cover_voice_record_btn")
                     ) {
                         Text(
-                            text = if (hasRecordedUserVoice) "Düzenle" else "Kaydet",
+                            text = if (hasRecordedUserVoice) {
+                                "Dinle / Düzenle"
+                            } else {
+                                "Kaydet"
+                            },
                             color = Color.Black,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
@@ -388,7 +390,9 @@ fun CoverVocalScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                colors = CardDefaults.cardColors(
+                    containerColor = StudioCardBg
+                )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -410,6 +414,7 @@ fun CoverVocalScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
                         )
+
                         Text(
                             "%${autotuneLevel.toInt()}",
                             style = MaterialTheme.typography.bodySmall.copy(
@@ -441,6 +446,7 @@ fun CoverVocalScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
                         )
+
                         Text(
                             "%${reverbLevel.toInt()}",
                             style = MaterialTheme.typography.bodySmall.copy(
@@ -460,6 +466,14 @@ fun CoverVocalScreen(
                             inactiveTrackColor = StudioSurfaceVariant
                         )
                     )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Not: Bu efekt ayarları şimdilik görsel kontrollerdir; Gemini söz üretimini veya gerçek ses kaydını değiştirmez.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted
+                    )
                 }
             }
         }
@@ -469,7 +483,7 @@ fun CoverVocalScreen(
                 onClick = {
                     viewModel.generateCover()
                 },
-                enabled = !isGenerating,
+                enabled = !isGenerating && targetVocal.id != "user_own_voice",
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -477,7 +491,8 @@ fun CoverVocalScreen(
                     .testTag("generate_cover_button"),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Transparent
+                    containerColor = Color.Transparent,
+                    disabledContainerColor = StudioSurfaceVariant
                 ),
                 contentPadding = PaddingValues(0.dp)
             ) {
@@ -506,7 +521,7 @@ fun CoverVocalScreen(
                             Spacer(modifier = Modifier.width(10.dp))
 
                             Text(
-                                text = "AI Cover ve Gerçek Müzik Üretiliyor...",
+                                text = "Gemini sözleri hazırlıyor...",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = FontWeight.Bold
                                 ),
@@ -525,7 +540,7 @@ fun CoverVocalScreen(
                             Spacer(modifier = Modifier.width(8.dp))
 
                             Text(
-                                text = "AI İLE COVER & VOKAL OLUŞTUR",
+                                text = "GEMINI İLE COVER SÖZLERİ OLUŞTUR",
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     fontWeight = FontWeight.Bold
                                 ),
@@ -537,7 +552,15 @@ fun CoverVocalScreen(
             }
         }
 
-        // COVER STATUS MESSAGE
+        item {
+            Text(
+                text = "Bu bölüm yalnızca Gemini ile şarkı sözleri ve aranje metni oluşturur. Eroq kullanılmaz ve kredi harcanmaz. MP3 üretimi yapılmaz.",
+                modifier = Modifier.padding(horizontal = 18.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted
+            )
+        }
+
         if (coverMessage.isNotBlank()) {
             item {
                 Card(
@@ -559,7 +582,6 @@ fun CoverVocalScreen(
             }
         }
 
-        // GENERATED COVER
         if (generatedCover != null) {
             val cover = generatedCover!!
 
@@ -600,97 +622,45 @@ fun CoverVocalScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
-                            text = if (generatedAudioUrl.isNullOrBlank()) {
-                                "Gerçek MP3 henüz hazır değil."
-                            } else {
-                                "Gerçek MP3 hazır."
-                            },
+                            text = "Gemini şarkı sözleri ve aranje notu hazır. Eroq kullanılmadı; MP3 üretilmedi.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (generatedAudioUrl.isNullOrBlank()) {
-                                TextSecondary
-                            } else {
-                                NeonGreen
-                            }
+                            color = NeonGreen
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Button(
+                            onClick = {
+                                viewModel.saveGeneratedCover()
+                            },
+                            enabled = generatedCover != null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("save_cover_btn"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NeonGreen.copy(alpha = 0.2f),
+                                contentColor = NeonGreen
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(
+                                horizontal = 12.dp,
+                                vertical = 10.dp
+                            )
                         ) {
-                            Button(
-                                onClick = {
-                                    viewModel.playGeneratedCover()
-                                },
-                                enabled = !generatedAudioUrl.isNullOrBlank(),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("play_cover_btn"),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = NeonMagenta
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(
-                                    horizontal = 10.dp,
-                                    vertical = 8.dp
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) {
-                                        Icons.Default.Stop
-                                    } else {
-                                        Icons.Default.PlayArrow
-                                    },
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                            Icon(
+                                imageVector = Icons.Default.BookmarkAdd,
+                                contentDescription = null,
+                                tint = NeonGreen,
+                                modifier = Modifier.size(18.dp)
+                            )
 
-                                Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
 
-                                Text(
-                                    text = if (isPlaying) "Oynatılıyor" else "Çal",
-                                    fontSize = 12.sp
-                                )
-                            }
-
-                            Button(
-                                onClick = {
-                                    viewModel.saveGeneratedCover()
-                                },
-                                enabled = !generatedAudioUrl.isNullOrBlank(),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("save_cover_btn"),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = NeonGreen.copy(alpha = 0.2f),
-                                    contentColor = NeonGreen
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(
-                                    horizontal = 8.dp,
-                                    vertical = 8.dp
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.BookmarkAdd,
-                                    contentDescription = null,
-                                    tint = NeonGreen,
-                                    modifier = Modifier.size(18.dp)
-                                )
-
-                                Spacer(modifier = Modifier.width(4.dp))
-
-                                Text("Kaydet", fontSize = 12.sp)
-                            }
+                            Text(
+                                "Sözleri Kütüphaneye Kaydet",
+                                fontSize = 13.sp
+                            )
                         }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        AudioVisualizerWaveform(
-                            amplitudes = amplitudes,
-                            isPlaying = isPlaying
-                        )
 
                         Spacer(modifier = Modifier.height(12.dp))
 
@@ -708,8 +678,42 @@ fun CoverVocalScreen(
                                     color = TextMuted
                                 )
 
+                                Spacer(modifier = Modifier.height(4.dp))
+
                                 Text(
                                     cover.vocalDirection,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextPrimary
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    "🎼 Enstrümantasyon:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text(
+                                    cover.instrumentation,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextPrimary
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    "🎹 Akorlar:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text(
+                                    cover.chordProgression,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = TextPrimary
                                 )
