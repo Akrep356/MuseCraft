@@ -18,13 +18,19 @@ import com.example.model.SongItem
 import com.example.model.VideoStoryboard
 import com.example.model.VirtualArtist
 import com.example.model.VocalGender
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 enum class StudioTab(val title: String) {
     COMPOSE("Beste & Söz"),
@@ -37,6 +43,7 @@ enum class StudioTab(val title: String) {
 class MusicStudioViewModel(application: Application) :
     AndroidViewModel(application) {
 
+    private val app = application
     private val db = AppDatabase.getInstance(application)
     private val geminiService = GeminiMusicService()
     private val eroqService = EroqMusicService()
@@ -111,6 +118,16 @@ class MusicStudioViewModel(application: Application) :
     val currentPlaybackTime = audioEngine.currentPlaybackTimeSec
     val totalPlaybackDuration = audioEngine.totalDurationSec
     val visualizerAmplitudes = audioEngine.visualizerAmplitudes
+
+    // DOWNLOAD STATE
+    private val _downloadingSongId = MutableStateFlow<String?>(null)
+    val downloadingSongId = _downloadingSongId.asStateFlow()
+
+    private val _downloadMessage = MutableStateFlow("")
+    val downloadMessage = _downloadMessage.asStateFlow()
+
+    private val _downloadProgress = MutableStateFlow(0)
+    val downloadProgress = _downloadProgress.asStateFlow()
 
     // COVER STATE
     val coverOriginalTitle =
@@ -270,8 +287,6 @@ class MusicStudioViewModel(application: Application) :
                     append(" BPM.")
                 }
 
-                // Bu çağrı kullanıcı uygulamada üretim başlattığında
-                // Eroq kredisi kullanabilir.
                 val result = eroqService.generateMusicAndWait(
                     prompt = prompt,
                     style = style,
@@ -325,9 +340,7 @@ class MusicStudioViewModel(application: Application) :
             return
         }
 
-        val song = _generatedSong.value
-
-        if (song == null) {
+        if (_generatedSong.value == null) {
             _generationMessage.value =
                 "Şarkı bilgileri bulunamadı."
             return
@@ -342,7 +355,7 @@ class MusicStudioViewModel(application: Application) :
             "Gerçek MP3 oynatılıyor."
     }
 
-    // SAVE GENERATED SONG
+    // SAVE GENERATED SONG TO DATABASE
     fun saveGeneratedSong(
         artistId: String? = null,
         artistName: String? = null
@@ -366,11 +379,7 @@ class MusicStudioViewModel(application: Application) :
                 audioUrl = _generatedSongAudioUrl.value,
                 audioFilePath = null,
                 durationSeconds =
-                    if (_generatedSongAudioUrl.value != null) {
-                        60
-                    } else {
-                        null
-                    }
+                    if (_generatedSongAudioUrl.value != null) 60 else null
             )
 
             db.songDao().insertSong(item)
@@ -379,6 +388,234 @@ class MusicStudioViewModel(application: Application) :
 
             _generationMessage.value =
                 "Şarkı kütüphaneye kaydedildi."
+        }
+    }
+
+    // DOWNLOAD GENERATED SONG
+    fun downloadGeneratedSong() {
+        val song = _generatedSong.value ?: run {
+            _downloadMessage.value =
+                "İndirilecek şarkı bulunamadı."
+            return
+        }
+
+        val url = _generatedSongAudioUrl.value
+
+        if (url.isNullOrBlank()) {
+            _downloadMessage.value =
+                "Gerçek MP3 bağlantısı bulunamadı."
+            return
+        }
+
+        if (_downloadingSongId.value != null) return
+
+        viewModelScope.launch {
+            val temporaryId = "generated_song"
+
+            _downloadingSongId.value = temporaryId
+            _downloadProgress.value = 0
+            _downloadMessage.value = "MP3 indiriliyor..."
+
+            try {
+                val file = downloadMp3ToPhone(
+                    url = url,
+                    title = song.title
+                )
+
+                val item = SongItem(
+                    title = song.title,
+                    lyrics = song.lyrics,
+                    genre = composeGenre.value.displayName,
+                    mood = composeMood.value,
+                    tempoBpm = composeBpm.value,
+                    musicalKey = composeKey.value,
+                    chordProgression = song.chordProgression,
+                    vocalToneName = composeVocalTone.value.name,
+                    vocalGender = composeVocalTone.value.gender.name,
+                    isCover = false,
+                    audioUrl = url,
+                    audioFilePath = file.absolutePath,
+                    durationSeconds = 60
+                )
+
+                db.songDao().insertSong(item)
+
+                _activePlayingSong.value = item
+                _downloadProgress.value = 100
+                _downloadMessage.value =
+                    "Şarkı indirildi ve kütüphaneye kaydedildi."
+
+            } catch (e: Exception) {
+                _downloadMessage.value =
+                    "İndirme hatası: ${e.message ?: "Bilinmeyen hata"}"
+            } finally {
+                _downloadingSongId.value = null
+            }
+        }
+    }
+
+    // DOWNLOAD A SONG ALREADY IN LIBRARY
+    fun downloadSong(song: SongItem) {
+        if (!song.audioFilePath.isNullOrBlank()) {
+            val existingFile = File(song.audioFilePath)
+
+            if (existingFile.exists()) {
+                _downloadMessage.value =
+                    "Bu şarkı zaten telefona indirilmiş."
+                return
+            }
+        }
+
+        val url = song.audioUrl
+
+        if (url.isNullOrBlank()) {
+            _downloadMessage.value =
+                "Bu şarkının indirilebilir MP3 bağlantısı yok."
+            return
+        }
+
+        if (_downloadingSongId.value != null) return
+
+        viewModelScope.launch {
+            _downloadingSongId.value = song.id
+            _downloadProgress.value = 0
+            _downloadMessage.value =
+                "${song.title} indiriliyor..."
+
+            try {
+                val file = downloadMp3ToPhone(
+                    url = url,
+                    title = song.title
+                )
+
+                val updatedSong = song.copy(
+                    audioFilePath = file.absolutePath
+                )
+
+                db.songDao().updateSong(updatedSong)
+
+                if (_activePlayingSong.value?.id == song.id) {
+                    _activePlayingSong.value = updatedSong
+                }
+
+                _downloadProgress.value = 100
+                _downloadMessage.value =
+                    "${song.title} telefona indirildi."
+
+            } catch (e: Exception) {
+                _downloadMessage.value =
+                    "İndirme hatası: ${e.message ?: "Bilinmeyen hata"}"
+            } finally {
+                _downloadingSongId.value = null
+            }
+        }
+    }
+
+    // MP3 DOWNLOAD HELPER
+    private suspend fun downloadMp3ToPhone(
+        url: String,
+        title: String
+    ): File = withContext(Dispatchers.IO) {
+
+        val musicFolder = File(
+            app.filesDir,
+            "Music/MuseCraft"
+        )
+
+        if (!musicFolder.exists() && !musicFolder.mkdirs()) {
+            throw IllegalStateException(
+                "MuseCraft müzik klasörü oluşturulamadı."
+            )
+        }
+
+        val safeTitle = title
+            .replace(Regex("[^a-zA-Z0-9ğüşöçıİĞÜŞÖÇ _-]"), "")
+            .trim()
+            .replace(Regex("\\s+"), "_")
+            .take(70)
+            .ifBlank { "MuseCraft_Sarki" }
+
+        var outputFile = File(
+            musicFolder,
+            "$safeTitle.mp3"
+        )
+
+        if (outputFile.exists()) {
+            outputFile = File(
+                musicFolder,
+                "${safeTitle}_${System.currentTimeMillis()}.mp3"
+            )
+        }
+
+        val connection =
+            (URL(url).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 30000
+                readTimeout = 60000
+                instanceFollowRedirects = true
+                setRequestProperty(
+                    "User-Agent",
+                    "MuseCraft Android"
+                )
+            }
+
+        try {
+            connection.connect()
+
+            val responseCode = connection.responseCode
+
+            if (responseCode !in 200..299) {
+                throw IllegalStateException(
+                    "Sunucu indirme hatası verdi: HTTP $responseCode"
+                )
+            }
+
+            val contentType =
+                connection.contentType.orEmpty()
+
+            if (
+                contentType.contains("text/html", true) ||
+                contentType.contains("application/json", true)
+            ) {
+                throw IllegalStateException(
+                    "Sunucu MP3 yerine farklı bir içerik gönderdi."
+                )
+            }
+
+            connection.inputStream.use { input ->
+                FileOutputStream(outputFile).use { output ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+
+                    while (
+                        input.read(buffer).also {
+                            bytesRead = it
+                        } != -1
+                    ) {
+                        output.write(buffer, 0, bytesRead)
+                    }
+
+                    output.flush()
+                }
+            }
+
+            if (
+                !outputFile.exists() ||
+                outputFile.length() < 1024
+            ) {
+                outputFile.delete()
+
+                throw IllegalStateException(
+                    "İndirilen MP3 dosyası boş veya geçersiz."
+                )
+            }
+
+            outputFile
+        } catch (e: Exception) {
+            outputFile.delete()
+            throw e
+        } finally {
+            connection.disconnect()
         }
     }
 
@@ -555,7 +792,8 @@ class MusicStudioViewModel(application: Application) :
         val remoteUrl = song.audioUrl
 
         when {
-            !localPath.isNullOrBlank() -> {
+            !localPath.isNullOrBlank() &&
+                File(localPath).exists() -> {
                 audioEngine.playFile(
                     filePath = localPath,
                     bpm = song.tempoBpm
