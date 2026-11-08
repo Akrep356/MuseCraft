@@ -178,7 +178,12 @@ function normalizeStatus(value) {
     return String(value || "unknown").toLowerCase();
 }
 
-// GEMINI API REQUEST
+// GEMINI RETRY HELPER
+function wait(milliseconds) {
+    return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+// GEMINI API REQUEST WITH AUTOMATIC RETRIES
 async function callGemini(prompt) {
     if (!GEMINI_API_KEY) {
         throw new Error(
@@ -186,81 +191,151 @@ async function callGemini(prompt) {
         );
     }
 
-    const response = await fetch(
-        `${GEMINI_API_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`,
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                contents: [
-                    {
-                        role: "user",
-                        parts: [
+    const maxAttempts = 4;
+    const retryableStatuses = [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+    ];
+
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            console.log("GEMINI ATTEMPT:", {
+                attempt,
+                maxAttempts,
+                model: GEMINI_MODEL
+            });
+
+            const response = await fetch(
+                `${GEMINI_API_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        contents: [
                             {
-                                text: prompt
+                                role: "user",
+                                parts: [
+                                    {
+                                        text: prompt
+                                    }
+                                ]
                             }
-                        ]
-                    }
-                ],
-                generationConfig: {
-                    temperature: 0.7,
-                    topP: 0.95,
-                    maxOutputTokens: 8192
+                        ],
+                        generationConfig: {
+                            temperature: 0.7,
+                            topP: 0.95,
+                            maxOutputTokens: 8192
+                        }
+                    }),
+                    signal: AbortSignal.timeout(120000)
                 }
-            }),
-            signal: AbortSignal.timeout(120000)
+            );
+
+            const result = await readJsonResponse(response);
+
+            if (!response.ok) {
+                const message = getErrorMessage(
+                    result,
+                    `Gemini API hatası: HTTP ${response.status}`
+                );
+
+                const error = new Error(message);
+                error.status = response.status;
+
+                console.error("GEMINI API ERROR:", {
+                    attempt,
+                    status: response.status,
+                    message
+                });
+
+                if (
+                    !retryableStatuses.includes(response.status) ||
+                    attempt === maxAttempts
+                ) {
+                    throw error;
+                }
+
+                lastError = error;
+
+                const delay = Math.pow(2, attempt - 1) * 1000;
+
+                console.log("GEMINI RETRY WAIT:", {
+                    nextAttempt: attempt + 1,
+                    waitMilliseconds: delay
+                });
+
+                await wait(delay);
+                continue;
+            }
+
+            const candidates = result.candidates || [];
+
+            if (!candidates.length) {
+                throw new Error(
+                    "Gemini yanıtında içerik bulunamadı."
+                );
+            }
+
+            const firstCandidate = candidates[0];
+            const parts =
+                firstCandidate.content?.parts || [];
+
+            const generatedText = parts
+                .filter(part => typeof part.text === "string")
+                .map(part => part.text)
+                .join("\n")
+                .trim();
+
+            if (!generatedText) {
+                throw new Error(
+                    "Gemini boş metin döndürdü."
+                );
+            }
+
+            console.log("GEMINI SUCCESS:", {
+                attempt,
+                responseLength: generatedText.length
+            });
+
+            return generatedText;
+
+        } catch (error) {
+            lastError = error;
+
+            const isRetryable =
+                retryableStatuses.includes(error.status) ||
+                error.name === "TimeoutError" ||
+                error.name === "AbortError" ||
+                error.name === "TypeError";
+
+            if (!isRetryable || attempt === maxAttempts) {
+                throw error;
+            }
+
+            const delay = Math.pow(2, attempt - 1) * 1000;
+
+            console.log("GEMINI CONNECTION RETRY:", {
+                attempt,
+                nextAttempt: attempt + 1,
+                waitMilliseconds: delay,
+                message: error.message
+            });
+
+            await wait(delay);
         }
+    }
+
+    throw lastError || new Error(
+        "Gemini isteği tüm denemelerde başarısız oldu."
     );
-
-    const result = await readJsonResponse(response);
-
-    if (!response.ok) {
-        console.error("GEMINI API ERROR:", {
-            status: response.status,
-            message: getErrorMessage(
-                result,
-                "Gemini API isteği başarısız."
-            )
-        });
-
-        const error = new Error(
-            getErrorMessage(
-                result,
-                `Gemini API hatası: HTTP ${response.status}`
-            )
-        );
-
-        error.status = response.status;
-        throw error;
-    }
-
-    const candidates = result.candidates || [];
-
-    if (!candidates.length) {
-        throw new Error(
-            "Gemini yanıtında içerik bulunamadı."
-        );
-    }
-
-    const firstCandidate = candidates[0];
-    const parts =
-        firstCandidate.content?.parts || [];
-
-    const generatedText = parts
-        .filter(part => typeof part.text === "string")
-        .map(part => part.text)
-        .join("\n")
-        .trim();
-
-    if (!generatedText) {
-        throw new Error(
-            "Gemini boş metin döndürdü."
-        );
-    }
-
-    return generatedText;
 }
 
 // SERVER INFORMATION
