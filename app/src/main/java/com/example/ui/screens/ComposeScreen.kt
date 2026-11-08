@@ -90,6 +90,7 @@ fun ComposeScreen(
     val isPlaying by viewModel.isAudioPlaying.collectAsState()
     val isPreparing by viewModel.isAudioPreparing.collectAsState()
     val playbackError by viewModel.audioPlaybackError.collectAsState()
+    val playbackErrorText = playbackError
     val amplitudes by viewModel.visualizerAmplitudes.collectAsState()
 
     val quickThemes = listOf(
@@ -700,9 +701,7 @@ fun ComposeScreen(
                             onClick = {
                                 if (isPlaying) {
                                     viewModel.pausePlayback()
-                                } else if (isPreparing) {
-                                    // Hazırlık sürerken tekrar başlatma.
-                                } else {
+                                } else if (!isPreparing) {
                                     viewModel.playGeneratedSong()
                                 }
                             },
@@ -761,15 +760,18 @@ fun ComposeScreen(
                             )
                         }
 
-                        if (!playbackError.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(8.dp))
+                        // PLAYBACK ERROR
+                        playbackErrorText
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { error ->
+                                Spacer(modifier = Modifier.height(8.dp))
 
-                            Text(
-                                text = playbackError,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = NeonMagenta
-                            )
-                        }
+                                Text(
+                                    text = error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NeonMagenta
+                                )
+                            }
 
                         Spacer(modifier = Modifier.height(10.dp))
 
