@@ -1,3 +1,4 @@
+
 package com.example.viewmodel
 
 import android.app.Application
@@ -6,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.audio.AudioSynthesisEngine
 import com.example.audio.UserVoiceRecorder
 import com.example.data.api.ArtistPersonaResult
+import com.example.data.api.EroqMusicService
 import com.example.data.api.GeminiMusicService
 import com.example.data.api.SceneData
 import com.example.data.api.SongGenerationResult
@@ -36,8 +38,11 @@ enum class StudioTab(val title: String) {
 }
 
 class MusicStudioViewModel(application: Application) : AndroidViewModel(application) {
+
     private val db = AppDatabase.getInstance(application)
     private val geminiService = GeminiMusicService()
+    private val eroqService = EroqMusicService()
+
     val audioEngine = AudioSynthesisEngine()
     val voiceRecorder = UserVoiceRecorder(application)
     val showVoiceRecordingDialog = MutableStateFlow(false)
@@ -50,7 +55,7 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
         _currentTab.value = tab
     }
 
-    // Room DB Flows
+    // Database flows
     val allSongs = db.songDao().getAllSongs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -60,11 +65,11 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
     val allStoryboards = db.videoStoryboardDao().getAllStoryboards()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // --- COMPOSE SCREEN STATE ---
+    // Compose state
     val composeTheme = MutableStateFlow("Gece sürüşü, neon ışıklar ve özlem")
     val composeGenre = MutableStateFlow(MusicGenre.POP)
     val composeMood = MutableStateFlow("Enerjik & Melankolik")
-    val composeVocalTone = MutableStateFlow(PresetVocalTones.tones[4]) // Elif Cyber Pop Diva
+    val composeVocalTone = MutableStateFlow(PresetVocalTones.tones[4])
     val composeKey = MutableStateFlow("A Minör")
     val composeBpm = MutableStateFlow(124)
 
@@ -74,11 +79,19 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
     private val _generatedSong = MutableStateFlow<SongGenerationResult?>(null)
     val generatedSong = _generatedSong.asStateFlow()
 
-    // --- COVER SCREEN STATE ---
+    private val _generatedSongAudioUrl = MutableStateFlow<String?>(null)
+    val generatedSongAudioUrl = _generatedSongAudioUrl.asStateFlow()
+
+    private val _generationMessage = MutableStateFlow("")
+    val generationMessage = _generationMessage.asStateFlow()
+
+    // Cover state
     val coverOriginalTitle = MutableStateFlow("Unutabilsem / Gece Masalı")
     val coverTargetGenre = MutableStateFlow(MusicGenre.EDM_ELECTRONIC)
-    val coverTargetVocal = MutableStateFlow(PresetVocalTones.tones[0]) // Emre Kadife
-    val coverNotes = MutableStateFlow("Daha yüksek BPM, synthwave basları ve duygusal tiz vokaller")
+    val coverTargetVocal = MutableStateFlow(PresetVocalTones.tones[0])
+    val coverNotes = MutableStateFlow(
+        "Daha yüksek BPM, synthwave basları ve duygusal tiz vokaller"
+    )
 
     private val _isGeneratingCover = MutableStateFlow(false)
     val isGeneratingCover = _isGeneratingCover.asStateFlow()
@@ -86,7 +99,7 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
     private val _generatedCover = MutableStateFlow<SongGenerationResult?>(null)
     val generatedCover = _generatedCover.asStateFlow()
 
-    // --- VIRTUAL ARTIST SCREEN STATE ---
+    // Virtual artist state
     val artistName = MutableStateFlow("AURA-7")
     val artistGenre = MutableStateFlow(MusicGenre.EDM_ELECTRONIC)
     val artistGender = MutableStateFlow(VocalGender.FEMALE)
@@ -98,7 +111,7 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
     private val _generatedArtist = MutableStateFlow<ArtistPersonaResult?>(null)
     val generatedArtist = _generatedArtist.asStateFlow()
 
-    // --- VIDEO CLIP SCREEN STATE ---
+    // Video state
     val videoSelectedSong = MutableStateFlow<SongItem?>(null)
     val videoVisualStyle = MutableStateFlow("Cyberpunk Neon & Hologram")
 
@@ -108,25 +121,24 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
     private val _generatedStoryboard = MutableStateFlow<VideoStoryboardResult?>(null)
     val generatedStoryboard = _generatedStoryboard.asStateFlow()
 
-    // Current active playing track info
+    // Active song
     private val _activePlayingSong = MutableStateFlow<SongItem?>(null)
     val activePlayingSong = _activePlayingSong.asStateFlow()
 
     init {
-        // Seed initial mock/starter artist if empty
         viewModelScope.launch {
-            // Seed a starter virtual artist and song for immediate exploration if database is fresh
             val starterArtist = VirtualArtist(
                 name = "AURA-7",
                 stageTitle = "Cyber Pop Idol",
                 genre = "EDM & Synthwave",
                 gender = "FEMALE",
-                bio = "AURA-7, yapay zeka ile insan duygularının kesişim noktasında parlayan yeni nesil sanal bir pop yıldızıdır.",
+                bio = "AURA-7, yapay zeka ile insan duygularının kesişim noktasında parlayan yeni nesil bir sanal pop yıldızıdır.",
                 visualStyle = "Cyberpunk Hologram",
                 signatureLook = "Neon saçlar, holografik kulaklık ve parıltılı sahne kostümleri.",
                 vocalToneId = "female_elif",
                 avatarDrawableRes = "img_virtual_female_artist"
             )
+
             db.virtualArtistDao().insertArtist(starterArtist)
 
             val starterArtistMale = VirtualArtist(
@@ -140,15 +152,23 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
                 vocalToneId = "male_kaan",
                 avatarDrawableRes = "img_virtual_male_artist"
             )
+
             db.virtualArtistDao().insertArtist(starterArtistMale)
         }
     }
 
+    // GEMINI LYRICS + EROQ REAL MUSIC GENERATION
     fun generateSong() {
+        if (_isGeneratingSong.value) return
+
         viewModelScope.launch {
             _isGeneratingSong.value = true
+            _generationMessage.value = "Şarkı sözleri hazırlanıyor..."
+            _generatedSongAudioUrl.value = null
+
             try {
-                val result = geminiService.generateSong(
+                // First: Gemini writes the lyrics.
+                val lyricsResult = geminiService.generateSong(
                     theme = composeTheme.value,
                     genre = composeGenre.value.displayName,
                     mood = composeMood.value,
@@ -157,15 +177,93 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
                     musicalKey = composeKey.value,
                     tempoBpm = composeBpm.value
                 )
-                _generatedSong.value = result
+
+                _generatedSong.value = lyricsResult
+
+                // Second: Eroq creates the actual sung MP3.
+                _generationMessage.value =
+                    "Eroq gerçek müzik ve vokal üretiyor..."
+
+                val selectedVocal = composeVocalTone.value
+
+                val style = buildString {
+                    append("Turkish language, ")
+                    append(selectedVocal.gender.displayName)
+                    append(", ")
+                    append(selectedVocal.name)
+                    append(", ")
+                    append(composeGenre.value.displayName)
+                    append(", ")
+                    append(composeMood.value)
+                    append(", ")
+                    append(composeBpm.value)
+                    append(" BPM, ")
+                    append(composeKey.value)
+                    append(", professional studio production, ")
+                    append(lyricsResult.instrumentation)
+                    append(", natural Turkish pronunciation")
+                }
+
+                val prompt = buildString {
+                    append("Türkçe ")
+                    append(composeGenre.value.displayName)
+                    append(" şarkısı. ")
+                    append(composeTheme.value)
+                    append(". Ruh hali: ")
+                    append(composeMood.value)
+                    append(". ")
+                    append(selectedVocal.gender.displayName)
+                    append(" vokal, doğal Türkçe telaffuz, ")
+                    append(composeBpm.value)
+                    append(" BPM.")
+                }
+
+                val result = eroqService.generateMusicAndWait(
+                    prompt = prompt,
+                    style = style,
+                    lyrics = lyricsResult.lyrics,
+                    title = lyricsResult.title,
+                    seconds = 60,
+                    instrumental = false
+                )
+
+                val audioUrl = result.optString("audioUrl", "")
+
+                if (audioUrl.isBlank()) {
+                    throw IllegalStateException(
+                        "Eroq şarkı üretti ancak MP3 bağlantısı alınamadı."
+                    )
+                }
+
+                _generatedSongAudioUrl.value = audioUrl
+
+                val finalTitle = result.optString(
+                    "title",
+                    lyricsResult.title
+                )
+
+                _generatedSong.value = lyricsResult.copy(
+                    title = finalTitle
+                )
+
+                _generationMessage.value =
+                    "Şarkı hazır! Kaydet düğmesiyle kütüphanene ekleyebilirsin."
+
+            } catch (e: Exception) {
+                _generationMessage.value =
+                    "Üretim hatası: ${e.message ?: "Bilinmeyen hata"}"
             } finally {
                 _isGeneratingSong.value = false
             }
         }
     }
 
-    fun saveGeneratedSong(artistId: String? = null, artistName: String? = null) {
+    fun saveGeneratedSong(
+        artistId: String? = null,
+        artistName: String? = null
+    ) {
         val song = _generatedSong.value ?: return
+
         viewModelScope.launch {
             val item = SongItem(
                 title = song.title,
@@ -179,16 +277,23 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
                 vocalGender = composeVocalTone.value.gender.name,
                 virtualArtistId = artistId,
                 virtualArtistName = artistName,
-                isCover = false
+                isCover = false,
+                audioUrl = _generatedSongAudioUrl.value,
+                audioFilePath = null,
+                durationSeconds = if (_generatedSongAudioUrl.value != null) 60 else null
             )
+
             db.songDao().insertSong(item)
             _activePlayingSong.value = item
+            _generationMessage.value = "Şarkı kütüphaneye kaydedildi."
         }
     }
 
+    // COVER GENERATION
     fun generateCover() {
         viewModelScope.launch {
             _isGeneratingCover.value = true
+
             try {
                 val result = geminiService.generateCover(
                     originalSongTitle = coverOriginalTitle.value,
@@ -197,7 +302,12 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
                     targetVocalTone = coverTargetVocal.value.name,
                     coverStyleNotes = coverNotes.value
                 )
+
                 _generatedCover.value = result
+
+            } catch (e: Exception) {
+                _generationMessage.value =
+                    "Cover hazırlama hatası: ${e.message}"
             } finally {
                 _isGeneratingCover.value = false
             }
@@ -206,6 +316,7 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
 
     fun saveGeneratedCover() {
         val cover = _generatedCover.value ?: return
+
         viewModelScope.launch {
             val item = SongItem(
                 title = cover.title,
@@ -220,14 +331,17 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
                 coverSourceSong = coverOriginalTitle.value,
                 isCover = true
             )
+
             db.songDao().insertSong(item)
             _activePlayingSong.value = item
         }
     }
 
+    // ARTIST GENERATION
     fun generateArtist() {
         viewModelScope.launch {
             _isGeneratingArtist.value = true
+
             try {
                 val result = geminiService.generateArtistPersona(
                     name = artistName.value,
@@ -235,7 +349,12 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
                     gender = artistGender.value.displayName,
                     visualStyle = artistVisualStyle.value
                 )
+
                 _generatedArtist.value = result
+
+            } catch (e: Exception) {
+                _generationMessage.value =
+                    "Sanatçı oluşturma hatası: ${e.message}"
             } finally {
                 _isGeneratingArtist.value = false
             }
@@ -244,8 +363,15 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
 
     fun saveGeneratedArtist() {
         val artist = _generatedArtist.value ?: return
+
         viewModelScope.launch {
-            val avatarRes = if (artistGender.value == VocalGender.FEMALE) "img_virtual_female_artist" else "img_virtual_male_artist"
+            val avatarRes =
+                if (artistGender.value == VocalGender.FEMALE) {
+                    "img_virtual_female_artist"
+                } else {
+                    "img_virtual_male_artist"
+                }
+
             val item = VirtualArtist(
                 name = artistName.value,
                 stageTitle = artist.stageTitle,
@@ -254,17 +380,25 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
                 bio = artist.bio,
                 visualStyle = artistVisualStyle.value,
                 signatureLook = artist.signatureLook,
-                vocalToneId = if (artistGender.value == VocalGender.FEMALE) "female_elif" else "male_kaan",
+                vocalToneId =
+                    if (artistGender.value == VocalGender.FEMALE) {
+                        "female_elif"
+                    } else {
+                        "male_kaan"
+                    },
                 avatarDrawableRes = avatarRes
             )
+
             db.virtualArtistDao().insertArtist(item)
         }
     }
 
+    // VIDEO STORYBOARD
     fun generateVideoStoryboard(song: SongItem) {
         viewModelScope.launch {
             _isGeneratingVideo.value = true
             videoSelectedSong.value = song
+
             try {
                 val result = geminiService.generateVideoStoryboard(
                     songTitle = song.title,
@@ -272,19 +406,19 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
                     lyrics = song.lyrics,
                     visualStyle = videoVisualStyle.value
                 )
+
                 _generatedStoryboard.value = result
 
-                // Convert to DB entity
                 val scenesJson = JSONArray().apply {
-                    result.scenes.forEach { s ->
+                    result.scenes.forEach { scene ->
                         put(JSONObject().apply {
-                            put("sceneNumber", s.sceneNumber)
-                            put("timeCode", s.timeCode)
-                            put("sectionName", s.sectionName)
-                            put("cameraAngle", s.cameraAngle)
-                            put("visualDescription", s.visualDescription)
-                            put("lyricSnippet", s.lyricSnippet)
-                            put("lightingVibe", s.lightingVibe)
+                            put("sceneNumber", scene.sceneNumber)
+                            put("timeCode", scene.timeCode)
+                            put("sectionName", scene.sectionName)
+                            put("cameraAngle", scene.cameraAngle)
+                            put("visualDescription", scene.visualDescription)
+                            put("lyricSnippet", scene.lyricSnippet)
+                            put("lightingVibe", scene.lightingVibe)
                         })
                     }
                 }.toString()
@@ -296,17 +430,35 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
                     conceptTitle = result.conceptTitle,
                     scenesJson = scenesJson
                 )
+
                 db.videoStoryboardDao().insertStoryboard(storyboard)
+
+            } catch (e: Exception) {
+                _generationMessage.value =
+                    "Video senaryosu hatası: ${e.message}"
             } finally {
                 _isGeneratingVideo.value = false
             }
         }
     }
 
+    // CURRENT SYNTH PLAYBACK
+    // Real MP3 playback will be connected in the next audio-engine update.
     fun playSongAudio(song: SongItem) {
         _activePlayingSong.value = song
-        val isCustomUserVoice = song.vocalToneName.contains("Kendi Sesim", true) || song.vocalToneName.contains("user_own_voice", true)
-        val isFemale = song.vocalGender == "FEMALE" || song.vocalToneName.contains("Kadın", true) || song.vocalToneName.contains("Elif", true) || song.vocalToneName.contains("Selin", true) || song.vocalToneName.contains("Derya", true) || song.vocalToneName.contains("Zeynep", true)
+
+        val isCustomUserVoice =
+            song.vocalToneName.contains("Kendi Sesim", true) ||
+            song.vocalToneName.contains("user_own_voice", true)
+
+        val isFemale =
+            song.vocalGender == "FEMALE" ||
+            song.vocalToneName.contains("Kadın", true) ||
+            song.vocalToneName.contains("Elif", true) ||
+            song.vocalToneName.contains("Selin", true) ||
+            song.vocalToneName.contains("Derya", true) ||
+            song.vocalToneName.contains("Zeynep", true)
+
         audioEngine.playTrack(
             genre = song.genre,
             musicalKey = song.musicalKey,
@@ -321,14 +473,18 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
             audioEngine.stopTrack()
         } else {
             val song = _activePlayingSong.value
+
             if (song != null) {
                 playSongAudio(song)
             } else {
-                val isCustomUserVoice = composeVocalTone.value.id == "user_own_voice"
+                val isCustomUserVoice =
+                    composeVocalTone.value.id == "user_own_voice"
+
                 audioEngine.playTrack(
                     genre = composeGenre.value.displayName,
                     musicalKey = composeKey.value,
-                    isFemaleVocal = composeVocalTone.value.gender == VocalGender.FEMALE,
+                    isFemaleVocal =
+                        composeVocalTone.value.gender == VocalGender.FEMALE,
                     isCustomUserVoice = isCustomUserVoice,
                     bpm = composeBpm.value
                 )
@@ -336,9 +492,15 @@ class MusicStudioViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    // DELETE
     fun deleteSong(song: SongItem) {
         viewModelScope.launch {
             db.songDao().deleteSong(song)
+
+            if (_activePlayingSong.value?.id == song.id) {
+                audioEngine.stopTrack()
+                _activePlayingSong.value = null
+            }
         }
     }
 
