@@ -96,8 +96,8 @@ fun ComposeScreen(
     val downloadingSongId by viewModel.downloadingSongId.collectAsState()
     val downloadMessage by viewModel.downloadMessage.collectAsState()
 
-    val isDownloadingGeneratedSong =
-        downloadingSongId == generatedResult?.id
+    // ID alanına ihtiyaç duymadan indirme durumunu kontrol et.
+    val isDownloadingGeneratedSong = downloadingSongId != null
 
     val quickThemes = listOf(
         "Gece sürüşü ve neon ışıklar",
@@ -194,6 +194,7 @@ fun ComposeScreen(
             }
         }
 
+        // SONG THEME
         item {
             Card(
                 modifier = Modifier
@@ -278,6 +279,7 @@ fun ComposeScreen(
             }
         }
 
+        // GENRE
         item {
             Column {
                 Text(
@@ -304,6 +306,7 @@ fun ComposeScreen(
             }
         }
 
+        // VOCAL
         item {
             VocalToneSelectorCard(
                 selectedTone = selectedVocal,
@@ -316,6 +319,7 @@ fun ComposeScreen(
             )
         }
 
+        // USER VOICE
         item {
             val hasRecordedUserVoice by
                 viewModel.voiceRecorder.hasRecording.collectAsState()
@@ -450,6 +454,7 @@ fun ComposeScreen(
             }
         }
 
+        // BPM AND KEY
         item {
             Card(
                 modifier = Modifier
@@ -559,6 +564,7 @@ fun ComposeScreen(
             }
         }
 
+        // GENERATE SONG
         item {
             Box(
                 modifier = Modifier
@@ -642,6 +648,7 @@ fun ComposeScreen(
             }
         }
 
+        // GENERATION MESSAGE
         if (generationMessage.isNotBlank()) {
             item {
                 Text(
@@ -653,6 +660,7 @@ fun ComposeScreen(
             }
         }
 
+        // GENERATED SONG
         if (generatedResult != null) {
             val song = generatedResult!!
 
@@ -694,6 +702,7 @@ fun ComposeScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
+                        // REAL MP3 PLAY BUTTON
                         Button(
                             onClick = {
                                 if (isPlaying) {
@@ -833,6 +842,7 @@ fun ComposeScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
+                        // SAVE SONG
                         Button(
                             onClick = {
                                 viewModel.saveGeneratedSong()
@@ -859,6 +869,7 @@ fun ComposeScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        // DOWNLOAD MP3 TO PHONE
                         Button(
                             onClick = {
                                 viewModel.downloadGeneratedSong()
