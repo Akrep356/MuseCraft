@@ -78,7 +78,6 @@ fun ComposeScreen(
 ) {
     val themeText by viewModel.composeTheme.collectAsState()
     val selectedGenre by viewModel.composeGenre.collectAsState()
-    val moodText by viewModel.composeMood.collectAsState()
     val selectedVocal by viewModel.composeVocalTone.collectAsState()
     val selectedKey by viewModel.composeKey.collectAsState()
     val bpm by viewModel.composeBpm.collectAsState()
@@ -96,7 +95,6 @@ fun ComposeScreen(
     val downloadingSongId by viewModel.downloadingSongId.collectAsState()
     val downloadMessage by viewModel.downloadMessage.collectAsState()
 
-    // ID alanına ihtiyaç duymadan indirme durumunu kontrol et.
     val isDownloadingGeneratedSong = downloadingSongId != null
 
     val quickThemes = listOf(
@@ -564,84 +562,73 @@ fun ComposeScreen(
             }
         }
 
-        // GENERATE SONG
+        // STEP 1: GEMINI LYRICS GENERATION
         item {
-            Box(
+            Button(
+                onClick = {
+                    viewModel.generateSong()
+                },
+                enabled = !isGenerating,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
+                    .height(54.dp)
+                    .testTag("generate_song_button"),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Transparent
+                ),
+                contentPadding = PaddingValues(0.dp)
             ) {
-                Button(
-                    onClick = {
-                        viewModel.generateSong()
-                    },
-                    enabled = !isGenerating,
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp)
-                        .testTag("generate_song_button"),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent
-                    ),
-                    contentPadding = PaddingValues(0.dp)
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    NeonViolet,
+                                    NeonMagenta,
+                                    NeonCyan
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        NeonViolet,
-                                        NeonMagenta,
-                                        NeonCyan
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isGenerating) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                CircularProgressIndicator(
-                                    color = Color.White,
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp
-                                )
+                    if (isGenerating && generatedResult == null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
 
-                                Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
 
-                                Text(
-                                    text = "Şarkı hazırlanıyor...",
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontWeight = FontWeight.Bold
-                                    ),
-                                    color = Color.White
-                                )
-                            }
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                            Text(
+                                text = "Gemini şarkı sözlerini hazırlıyor...",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
 
-                                Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
 
-                                Text(
-                                    text = "GERÇEK ŞARKI ÜRET",
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = FontWeight.Bold
-                                    ),
-                                    color = Color.White,
-                                    letterSpacing = 0.5.sp
-                                )
-                            }
+                            Text(
+                                text = "1. ŞARKI SÖZLERİNİ OLUŞTUR",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
@@ -699,6 +686,55 @@ fun ComposeScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = NeonCyan
                         )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // STEP 2: EROQ REAL MUSIC GENERATION
+                        Button(
+                            onClick = {
+                                viewModel.generateRealSong()
+                            },
+                            enabled = !isGenerating &&
+                                generatedAudioUrl == null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("generate_real_music_button"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NeonMagenta,
+                                disabledContainerColor =
+                                    NeonMagenta.copy(alpha = 0.35f)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            if (isGenerating) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Text("Gerçek müzik hazırlanıyor...")
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null
+                                )
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Text(
+                                    if (generatedAudioUrl != null) {
+                                        "GERÇEK MÜZİK HAZIR"
+                                    } else {
+                                        "2. GERÇEK MÜZİĞİ ÜRET (EROQ)"
+                                    },
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
 
                         Spacer(modifier = Modifier.height(14.dp))
 
@@ -760,7 +796,7 @@ fun ComposeScreen(
                             Spacer(modifier = Modifier.height(6.dp))
 
                             Text(
-                                text = "Gerçek MP3 bağlantısı henüz hazır değil.",
+                                text = "Önce ikinci düğmeyle gerçek müziği üretmelisin. Bu aşamaya kadar Eroq müzik kredisi kullanılmaz.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextMuted
                             )
