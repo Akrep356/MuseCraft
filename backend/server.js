@@ -8,6 +8,11 @@ const PORT = process.env.PORT || 10000;
 const EROQ_API_KEY = process.env.EROQ_API_KEY;
 const EROQ_API_URL = "https://eroq.ai/v1";
 
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = "gemini-3.8-flash";
+const GEMINI_API_URL =
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
@@ -18,7 +23,7 @@ async function readJsonResponse(response) {
         return text ? JSON.parse(text) : {};
     } catch {
         return {
-            error: "Eroq geçerli JSON yanıtı döndürmedi.",
+            error: "Sunucu geçerli JSON yanıtı döndürmedi.",
             raw: text.slice(0, 2000)
         };
     }
@@ -83,13 +88,8 @@ function findAudioUrl(root) {
             return null;
         }
 
-        if (typeof value !== "object") {
-            return null;
-        }
-
-        if (visited.has(value)) {
-            return null;
-        }
+        if (typeof value !== "object") return null;
+        if (visited.has(value)) return null;
 
         visited.add(value);
         checked++;
@@ -99,7 +99,6 @@ function findAudioUrl(root) {
                 const found = search(item, depth + 1);
                 if (found) return found;
             }
-
             return null;
         }
 
@@ -179,27 +178,179 @@ function normalizeStatus(value) {
     return String(value || "unknown").toLowerCase();
 }
 
+// GEMINI API REQUEST
+async function callGemini(prompt) {
+    if (!GEMINI_API_KEY) {
+        throw new Error(
+            "GEMINI_API_KEY Render ortamında tanımlanmamış."
+        );
+    }
+
+    const response = await fetch(
+        `${GEMINI_API_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            {
+                                text: prompt
+                            }
+                        ]
+                    }
+                ],
+                generationConfig: {
+                    temperature: 0.7,
+                    topP: 0.95,
+                    maxOutputTokens: 8192
+                }
+            }),
+            signal: AbortSignal.timeout(120000)
+        }
+    );
+
+    const result = await readJsonResponse(response);
+
+    if (!response.ok) {
+        console.error("GEMINI API ERROR:", {
+            status: response.status,
+            message: getErrorMessage(
+                result,
+                "Gemini API isteği başarısız."
+            )
+        });
+
+        const error = new Error(
+            getErrorMessage(
+                result,
+                `Gemini API hatası: HTTP ${response.status}`
+            )
+        );
+
+        error.status = response.status;
+        throw error;
+    }
+
+    const candidates = result.candidates || [];
+
+    if (!candidates.length) {
+        throw new Error(
+            "Gemini yanıtında içerik bulunamadı."
+        );
+    }
+
+    const firstCandidate = candidates[0];
+    const parts =
+        firstCandidate.content?.parts || [];
+
+    const generatedText = parts
+        .filter(part => typeof part.text === "string")
+        .map(part => part.text)
+        .join("\n")
+        .trim();
+
+    if (!generatedText) {
+        throw new Error(
+            "Gemini boş metin döndürdü."
+        );
+    }
+
+    return generatedText;
+}
+
+// SERVER INFORMATION
 app.get("/", (req, res) => {
     res.json({
         app: "MuseCraft Music Server",
         status: "online",
-        engine: "eroq-music-one",
+        engines: {
+            music: "eroq-music-one",
+            textAI: GEMINI_MODEL
+        },
         endpoints: [
             "/health",
             "/api/music/generate",
-            "/api/music/status/:id"
+            "/api/music/status/:id",
+            "/api/gemini/generate"
         ]
     });
 });
 
+// HEALTH CHECK
 app.get("/health", (req, res) => {
     res.json({
         ok: true,
         server: "MuseCraft",
-        eroqConfigured: Boolean(EROQ_API_KEY)
+        eroqConfigured: Boolean(EROQ_API_KEY),
+        geminiConfigured: Boolean(GEMINI_API_KEY)
     });
 });
 
+// GEMINI GENERATION
+app.post("/api/gemini/generate", async (req, res) => {
+    try {
+        if (!GEMINI_API_KEY) {
+            return res.status(500).json({
+                ok: false,
+                error: "GEMINI_API_KEY Render ortamında tanımlanmamış."
+            });
+        }
+
+        const prompt = String(
+            req.body?.prompt || ""
+        ).trim();
+
+        if (!prompt) {
+            return res.status(400).json({
+                ok: false,
+                error: "Gemini için prompt gerekli."
+            });
+        }
+
+        if (prompt.length > 20000) {
+            return res.status(400).json({
+                ok: false,
+                error: "Prompt en fazla 20000 karakter olabilir."
+            });
+        }
+
+        console.log("GEMINI REQUEST:", {
+            model: GEMINI_MODEL,
+            promptLength: prompt.length
+        });
+
+        const generatedText = await callGemini(prompt);
+
+        console.log("GEMINI RESPONSE:", {
+            model: GEMINI_MODEL,
+            responseLength: generatedText.length
+        });
+
+        return res.json({
+            ok: true,
+            model: GEMINI_MODEL,
+            text: generatedText
+        });
+
+    } catch (error) {
+        console.error("GEMINI GENERATION ERROR:", error);
+
+        return res.status(
+            error.status || 500
+        ).json({
+            ok: false,
+            error: error.message ||
+                "Gemini üretiminde beklenmeyen hata."
+        });
+    }
+});
+
+// EROQ MUSIC GENERATION
 app.post("/api/music/generate", async (req, res) => {
     try {
         if (!EROQ_API_KEY) {
@@ -344,6 +495,7 @@ app.post("/api/music/generate", async (req, res) => {
     }
 });
 
+// EROQ MUSIC STATUS
 app.get("/api/music/status/:id", async (req, res) => {
     try {
         if (!EROQ_API_KEY) {
@@ -426,10 +578,12 @@ app.get("/api/music/status/:id", async (req, res) => {
     }
 });
 
+// START SERVER
 app.listen(PORT, "0.0.0.0", () => {
     console.log(
         "MuseCraft Music Server listening on port " + PORT
     );
 
     console.log("Eroq Music One integration ready.");
+    console.log("Gemini integration ready:", Boolean(GEMINI_API_KEY));
 });
