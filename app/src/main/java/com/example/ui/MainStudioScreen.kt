@@ -1,3 +1,4 @@
+
 package com.example.ui
 
 import androidx.compose.foundation.background
@@ -6,7 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,7 +25,6 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -57,7 +56,6 @@ import com.example.ui.theme.StudioSurface
 import com.example.ui.theme.StudioSurfaceVariant
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
-import com.example.ui.theme.TextSecondary
 import com.example.viewmodel.MusicStudioViewModel
 import com.example.viewmodel.StudioTab
 
@@ -67,24 +65,32 @@ fun MainStudioScreen(
     viewModel: MusicStudioViewModel
 ) {
     val currentTab by viewModel.currentTab.collectAsState()
-    val isPlaying by viewModel.audioEngine.isPlaying.collectAsState()
+
+    // Gerçek MP3 oynatma durumu
+    val isPlaying by viewModel.isAudioPlaying.collectAsState()
+    val activeSong by viewModel.activePlayingSong.collectAsState()
+
+    // Mini oynatıcı bilgileri
     val elapsedSec by viewModel.audioEngine.currentPlaybackTimeSec.collectAsState()
     val currentSection by viewModel.audioEngine.currentPlayingSection.collectAsState()
     val bpm by viewModel.audioEngine.currentBpm.collectAsState()
-    val activeSong by viewModel.activePlayingSong.collectAsState()
 
     Scaffold(
         containerColor = StudioBackground,
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    Brush.linearGradient(listOf(NeonViolet, NeonCyan))
+                                    Brush.linearGradient(
+                                        listOf(NeonViolet, NeonCyan)
+                                    )
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
@@ -95,7 +101,9 @@ fun MainStudioScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                         }
+
                         Spacer(modifier = Modifier.width(10.dp))
+
                         Column {
                             Text(
                                 text = "AI MUSIC STUDIO",
@@ -105,6 +113,7 @@ fun MainStudioScreen(
                                 ),
                                 color = TextPrimary
                             )
+
                             Text(
                                 text = "Beste • Vokal • Karakter • Klip",
                                 style = MaterialTheme.typography.labelSmall,
@@ -120,8 +129,13 @@ fun MainStudioScreen(
                             modifier = Modifier
                                 .padding(end = 12.dp)
                                 .clip(CircleShape)
-                                .background(NeonViolet.copy(alpha = 0.2f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .background(
+                                    NeonViolet.copy(alpha = 0.2f)
+                                )
+                                .padding(
+                                    horizontal = 8.dp,
+                                    vertical = 4.dp
+                                )
                         ) {
                             Box(
                                 modifier = Modifier
@@ -129,10 +143,14 @@ fun MainStudioScreen(
                                     .clip(CircleShape)
                                     .background(NeonMagenta)
                             )
+
                             Spacer(modifier = Modifier.width(6.dp))
+
                             Text(
                                 text = "CANLI SES",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
                                 color = NeonMagenta
                             )
                         }
@@ -145,17 +163,27 @@ fun MainStudioScreen(
         },
         bottomBar = {
             Column {
-                // Sticky Mini Audio Player Bar
                 MiniStudioPlayerBar(
                     isPlaying = isPlaying,
-                    currentSection = currentSection,
+                    currentSection = if (isPlaying) {
+                        "Eroq Music One • Gerçek MP3"
+                    } else {
+                        currentSection
+                    },
                     elapsedSec = elapsedSec,
                     bpm = bpm,
                     songTitle = activeSong?.title,
-                    onTogglePlay = { viewModel.togglePlayback() }
+                    onTogglePlay = {
+                        if (isPlaying) {
+                            viewModel.pausePlayback()
+                        } else {
+                            activeSong?.let { song ->
+                                viewModel.playSongAudio(song)
+                            }
+                        }
+                    }
                 )
 
-                // Navigation Bar
                 NavigationBar(
                     containerColor = StudioSurface,
                     contentColor = TextPrimary,
@@ -163,9 +191,18 @@ fun MainStudioScreen(
                 ) {
                     NavigationBarItem(
                         selected = currentTab == StudioTab.COMPOSE,
-                        onClick = { viewModel.selectTab(StudioTab.COMPOSE) },
-                        icon = { Icon(Icons.Default.MusicNote, contentDescription = "Beste") },
-                        label = { Text("Beste & Söz", fontSize = 11.sp) },
+                        onClick = {
+                            viewModel.selectTab(StudioTab.COMPOSE)
+                        },
+                        icon = {
+                            Icon(
+                                Icons.Default.MusicNote,
+                                contentDescription = "Beste"
+                            )
+                        },
+                        label = {
+                            Text("Beste & Söz", fontSize = 11.sp)
+                        },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = NeonViolet,
                             selectedTextColor = NeonViolet,
@@ -178,9 +215,18 @@ fun MainStudioScreen(
 
                     NavigationBarItem(
                         selected = currentTab == StudioTab.COVER,
-                        onClick = { viewModel.selectTab(StudioTab.COVER) },
-                        icon = { Icon(Icons.Default.SwapHoriz, contentDescription = "Cover") },
-                        label = { Text("Cover & Vokal", fontSize = 11.sp) },
+                        onClick = {
+                            viewModel.selectTab(StudioTab.COVER)
+                        },
+                        icon = {
+                            Icon(
+                                Icons.Default.SwapHoriz,
+                                contentDescription = "Cover"
+                            )
+                        },
+                        label = {
+                            Text("Cover & Vokal", fontSize = 11.sp)
+                        },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = NeonMagenta,
                             selectedTextColor = NeonMagenta,
@@ -193,9 +239,18 @@ fun MainStudioScreen(
 
                     NavigationBarItem(
                         selected = currentTab == StudioTab.VIRTUAL_ARTIST,
-                        onClick = { viewModel.selectTab(StudioTab.VIRTUAL_ARTIST) },
-                        icon = { Icon(Icons.Default.Face, contentDescription = "Karakter") },
-                        label = { Text("Sanal Sanatçı", fontSize = 11.sp) },
+                        onClick = {
+                            viewModel.selectTab(StudioTab.VIRTUAL_ARTIST)
+                        },
+                        icon = {
+                            Icon(
+                                Icons.Default.Face,
+                                contentDescription = "Karakter"
+                            )
+                        },
+                        label = {
+                            Text("Sanal Sanatçı", fontSize = 11.sp)
+                        },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = NeonCyan,
                             selectedTextColor = NeonCyan,
@@ -208,9 +263,18 @@ fun MainStudioScreen(
 
                     NavigationBarItem(
                         selected = currentTab == StudioTab.VIDEO_CLIP,
-                        onClick = { viewModel.selectTab(StudioTab.VIDEO_CLIP) },
-                        icon = { Icon(Icons.Default.Movie, contentDescription = "Video") },
-                        label = { Text("Video Klip", fontSize = 11.sp) },
+                        onClick = {
+                            viewModel.selectTab(StudioTab.VIDEO_CLIP)
+                        },
+                        icon = {
+                            Icon(
+                                Icons.Default.Movie,
+                                contentDescription = "Video"
+                            )
+                        },
+                        label = {
+                            Text("Video Klip", fontSize = 11.sp)
+                        },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = NeonAmber,
                             selectedTextColor = NeonAmber,
@@ -223,9 +287,18 @@ fun MainStudioScreen(
 
                     NavigationBarItem(
                         selected = currentTab == StudioTab.LIBRARY,
-                        onClick = { viewModel.selectTab(StudioTab.LIBRARY) },
-                        icon = { Icon(Icons.Default.LibraryMusic, contentDescription = "Kütüphane") },
-                        label = { Text("Kütüphane", fontSize = 11.sp) },
+                        onClick = {
+                            viewModel.selectTab(StudioTab.LIBRARY)
+                        },
+                        icon = {
+                            Icon(
+                                Icons.Default.LibraryMusic,
+                                contentDescription = "Kütüphane"
+                            )
+                        },
+                        label = {
+                            Text("Kütüphane", fontSize = 11.sp)
+                        },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = NeonCyan,
                             selectedTextColor = NeonCyan,
@@ -239,27 +312,48 @@ fun MainStudioScreen(
             }
         }
     ) { innerPadding ->
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
             when (currentTab) {
-                StudioTab.COMPOSE -> ComposeScreen(viewModel = viewModel)
-                StudioTab.COVER -> CoverVocalScreen(viewModel = viewModel)
-                StudioTab.VIRTUAL_ARTIST -> VirtualArtistScreen(viewModel = viewModel)
-                StudioTab.VIDEO_CLIP -> VideoClipScreen(viewModel = viewModel)
-                StudioTab.LIBRARY -> LibraryScreen(viewModel = viewModel)
+                StudioTab.COMPOSE -> {
+                    ComposeScreen(viewModel = viewModel)
+                }
+
+                StudioTab.COVER -> {
+                    CoverVocalScreen(viewModel = viewModel)
+                }
+
+                StudioTab.VIRTUAL_ARTIST -> {
+                    VirtualArtistScreen(viewModel = viewModel)
+                }
+
+                StudioTab.VIDEO_CLIP -> {
+                    VideoClipScreen(viewModel = viewModel)
+                }
+
+                StudioTab.LIBRARY -> {
+                    LibraryScreen(viewModel = viewModel)
+                }
             }
         }
     }
 
-    val showVoiceDialog by viewModel.showVoiceRecordingDialog.collectAsState()
+    val showVoiceDialog by
+        viewModel.showVoiceRecordingDialog.collectAsState()
+
     if (showVoiceDialog) {
         UserVoiceRecordingDialog(
             viewModel = viewModel,
-            onDismiss = { viewModel.showVoiceRecordingDialog.value = false },
-            onVoiceSelected = { viewModel.showVoiceRecordingDialog.value = false }
+            onDismiss = {
+                viewModel.showVoiceRecordingDialog.value = false
+            },
+            onVoiceSelected = {
+                viewModel.showVoiceRecordingDialog.value = false
+            }
         )
     }
 }
