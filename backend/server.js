@@ -11,7 +11,6 @@ const EROQ_API_URL = "https://eroq.ai/v1";
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-// JSON yanıtını güvenli şekilde oku
 async function readJsonResponse(response) {
     const text = await response.text();
 
@@ -25,7 +24,161 @@ async function readJsonResponse(response) {
     }
 }
 
-// SUNUCU KONTROLÜ
+function getErrorMessage(result, fallback) {
+    if (!result) return fallback;
+
+    if (typeof result.error === "string") {
+        return result.error;
+    }
+
+    if (result.error && typeof result.error.message === "string") {
+        return result.error.message;
+    }
+
+    if (typeof result.message === "string") {
+        return result.message;
+    }
+
+    return fallback;
+}
+
+function isHttpUrl(value) {
+    if (typeof value !== "string") return false;
+
+    try {
+        const parsed = new URL(value);
+        return parsed.protocol === "https:" ||
+            parsed.protocol === "http:";
+    } catch {
+        return false;
+    }
+}
+
+function findAudioUrl(root) {
+    const preferredKeys = [
+        "audioUrl",
+        "audio_url",
+        "downloadUrl",
+        "download_url",
+        "mp3Url",
+        "mp3_url",
+        "audioFileUrl",
+        "audio_file_url",
+        "fileUrl",
+        "file_url",
+        "mp3",
+        "url"
+    ];
+
+    const visited = new Set();
+    let checked = 0;
+
+    function search(value, depth) {
+        if (
+            value === null ||
+            value === undefined ||
+            depth > 10 ||
+            checked > 300
+        ) {
+            return null;
+        }
+
+        if (typeof value !== "object") {
+            return null;
+        }
+
+        if (visited.has(value)) {
+            return null;
+        }
+
+        visited.add(value);
+        checked++;
+
+        if (Array.isArray(value)) {
+            for (const item of value) {
+                const found = search(item, depth + 1);
+                if (found) return found;
+            }
+
+            return null;
+        }
+
+        for (const key of preferredKeys) {
+            if (
+                Object.prototype.hasOwnProperty.call(value, key) &&
+                isHttpUrl(value[key])
+            ) {
+                return value[key];
+            }
+        }
+
+        const nestedKeys = [
+            "data",
+            "result",
+            "results",
+            "output",
+            "outputs",
+            "audio",
+            "track",
+            "tracks",
+            "file",
+            "files",
+            "job",
+            "jobs"
+        ];
+
+        for (const key of nestedKeys) {
+            if (
+                Object.prototype.hasOwnProperty.call(value, key)
+            ) {
+                const found = search(value[key], depth + 1);
+                if (found) return found;
+            }
+        }
+
+        for (const key of Object.keys(value)) {
+            if (nestedKeys.includes(key)) continue;
+
+            const child = value[key];
+
+            if (child && typeof child === "object") {
+                const found = search(child, depth + 1);
+                if (found) return found;
+            }
+        }
+
+        return null;
+    }
+
+    return search(root, 0);
+}
+
+function findJobId(result) {
+    if (!result || typeof result !== "object") {
+        return null;
+    }
+
+    if (Array.isArray(result.jobs) && result.jobs.length > 0) {
+        const job = result.jobs[0];
+
+        if (job && typeof job === "object") {
+            return job.id ||
+                job.job_id ||
+                job.jobId ||
+                null;
+        }
+    }
+
+    return result.id ||
+        result.job_id ||
+        result.jobId ||
+        null;
+}
+
+function normalizeStatus(value) {
+    return String(value || "unknown").toLowerCase();
+}
+
 app.get("/", (req, res) => {
     res.json({
         app: "MuseCraft Music Server",
@@ -39,7 +192,6 @@ app.get("/", (req, res) => {
     });
 });
 
-// SAĞLIK KONTROLÜ
 app.get("/health", (req, res) => {
     res.json({
         ok: true,
@@ -48,7 +200,6 @@ app.get("/health", (req, res) => {
     });
 });
 
-// MÜZİK ÜRET
 app.post("/api/music/generate", async (req, res) => {
     try {
         if (!EROQ_API_KEY) {
@@ -93,10 +244,12 @@ app.post("/api/music/generate", async (req, res) => {
             });
         }
 
-        if (cleanPrompt.length > 600 ||
+        if (
+            cleanPrompt.length > 600 ||
             cleanStyle.length > 600 ||
             cleanLyrics.length > 3000 ||
-            cleanTitle.length > 80) {
+            cleanTitle.length > 80
+        ) {
             return res.status(400).json({
                 ok: false,
                 error: "Gönderilen metinlerden biri izin verilen uzunluğu aşıyor."
@@ -140,20 +293,17 @@ app.post("/api/music/generate", async (req, res) => {
 
             return res.status(response.status).json({
                 ok: false,
-                error:
-                    result.error?.message ||
-                    result.error ||
-                    result.message ||
-                    "Eroq müzik üretim hatası.",
+                error: getErrorMessage(
+                    result,
+                    "Eroq müzik üretim hatası."
+                ),
                 details: result
             });
         }
 
-        const jobs = Array.isArray(result.jobs)
-            ? result.jobs
-            : [];
+        const jobId = findJobId(result);
 
-        if (jobs.length === 0 || !jobs[0].id) {
+        if (!jobId) {
             console.error("EROQ JOB ID MISSING:", result);
 
             return res.status(502).json({
@@ -163,14 +313,23 @@ app.post("/api/music/generate", async (req, res) => {
             });
         }
 
+        const audioUrl = findAudioUrl(result);
+
+        console.log("EROQ JOB CREATED:", jobId);
+        console.log(
+            "EROQ INITIAL AUDIO URL:",
+            audioUrl ? "FOUND" : "NOT YET AVAILABLE"
+        );
+
         return res.status(202).json({
             ok: true,
-            status: result.status || "processing",
-            id: jobs[0].id,
-            jobs: jobs,
-            title: result.title || cleanTitle,
-            lyrics: result.lyrics || cleanLyrics,
-            style: result.style || cleanStyle,
+            status: normalizeStatus(result.status || "processing"),
+            id: String(jobId),
+            jobs: Array.isArray(result.jobs) ? result.jobs : [],
+            audioUrl: audioUrl,
+            title: result.title || cleanTitle || null,
+            lyrics: result.lyrics || cleanLyrics || null,
+            style: result.style || cleanStyle || null,
             seconds: result.seconds || duration,
             usage: result.usage || null
         });
@@ -185,13 +344,12 @@ app.post("/api/music/generate", async (req, res) => {
     }
 });
 
-// MÜZİK DURUMUNU KONTROL ET
 app.get("/api/music/status/:id", async (req, res) => {
     try {
         if (!EROQ_API_KEY) {
             return res.status(500).json({
                 ok: false,
-                error: "EROQ_API_KEY tanımlanmamış."
+                error: "EROQ_API_KEY Render ortamında tanımlanmamış."
             });
         }
 
@@ -221,24 +379,39 @@ app.get("/api/music/status/:id", async (req, res) => {
 
             return res.status(response.status).json({
                 ok: false,
-                error:
-                    result.error?.message ||
-                    result.error ||
-                    "Müzik durumu alınamadı.",
+                error: getErrorMessage(
+                    result,
+                    "Müzik durumu alınamadı."
+                ),
                 details: result
             });
         }
 
-        const status = String(result.status || "unknown").toLowerCase();
+        const audioUrl = findAudioUrl(result);
+
+        const status = normalizeStatus(
+            result.status ||
+            result.data?.status ||
+            "unknown"
+        );
+
+        const responseId = findJobId(result) || id;
+
+        console.log("EROQ STATUS:", {
+            id: responseId,
+            status: status,
+            audioUrlFound: Boolean(audioUrl)
+        });
 
         return res.json({
             ok: true,
-            id: result.id || id,
+            id: String(responseId),
             status: status,
-            title: result.title || null,
-            style: result.style || null,
-            lyrics: result.lyrics || null,
-            seconds: result.seconds || null,
+            title: result.title || result.data?.title || null,
+            style: result.style || result.data?.style || null,
+            lyrics: result.lyrics || result.data?.lyrics || null,
+            seconds: result.seconds || result.data?.seconds || null,
+            audioUrl: audioUrl,
             data: result.data || null,
             error: result.error || null
         });
@@ -253,10 +426,10 @@ app.get("/api/music/status/:id", async (req, res) => {
     }
 });
 
-// SUNUCUYU BAŞLAT
 app.listen(PORT, "0.0.0.0", () => {
     console.log(
         "MuseCraft Music Server listening on port " + PORT
     );
+
     console.log("Eroq Music One integration ready.");
 });
