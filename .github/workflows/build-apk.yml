@@ -1,3 +1,4 @@
+
 name: Build Android APK
 
 on:
@@ -11,6 +12,7 @@ jobs:
   build:
     name: Build Debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -29,8 +31,34 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Increase Gradle download timeout
+        run: |
+          FILE="gradle/wrapper/gradle-wrapper.properties"
+
+          if grep -q '^networkTimeout=' "$FILE"; then
+            sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$FILE"
+          else
+            echo 'networkTimeout=120000' >> "$FILE"
+          fi
+
+      - name: Build Debug APK with retries
+        run: |
+          for attempt in 1 2 3; do
+            echo "APK derleme denemesi: $attempt / 3"
+
+            if ./gradlew assembleDebug --stacktrace; then
+              echo "APK başarıyla oluşturuldu."
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "Derleme başarısız. 15 saniye sonra yeniden denenecek."
+              sleep 15
+            fi
+          done
+
+          echo "Üç deneme de başarısız oldu."
+          exit 1
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
