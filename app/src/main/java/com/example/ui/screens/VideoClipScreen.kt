@@ -1,6 +1,6 @@
+
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -30,12 +30,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,9 +45,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,7 +57,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.SongItem
 import com.example.ui.components.AudioVisualizerWaveform
@@ -71,7 +65,6 @@ import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonMagenta
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.StudioCardBg
-import com.example.ui.theme.StudioSurface
 import com.example.ui.theme.StudioSurfaceVariant
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
@@ -88,9 +81,12 @@ fun VideoClipScreen(
     val visualStyle by viewModel.videoVisualStyle.collectAsState()
     val isGenerating by viewModel.isGeneratingVideo.collectAsState()
     val generatedStoryboard by viewModel.generatedStoryboard.collectAsState()
+
+    // ViewModel mesajlarını ekranda göstermek için.
+    val generationMessage by viewModel.generationMessage.collectAsState()
+
     val isPlaying by viewModel.audioEngine.isPlaying.collectAsState()
     val amplitudes by viewModel.audioEngine.visualizerAmplitudes.collectAsState()
-    val elapsedSec by viewModel.audioEngine.currentPlaybackTimeSec.collectAsState()
     val currentSection by viewModel.audioEngine.currentPlayingSection.collectAsState()
 
     val videoStyles = listOf(
@@ -102,13 +98,17 @@ fun VideoClipScreen(
         "Sürrealist Sanat & Görselleştirici"
     )
 
-    // Breathing video pulse animation
-    val infiniteTransition = rememberInfiniteTransition(label = "video_zoom")
+    val infiniteTransition =
+        rememberInfiniteTransition(label = "video_zoom")
+
     val stageZoom by infiniteTransition.animateFloat(
         initialValue = 1.0f,
         targetValue = if (isPlaying) 1.06f else 1.0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
+            animation = tween(
+                1800,
+                easing = FastOutSlowInEasing
+            ),
             repeatMode = RepeatMode.Reverse
         ),
         label = "zoom"
@@ -120,7 +120,8 @@ fun VideoClipScreen(
             .padding(bottom = 72.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Video Stage Preview Player (16:9 Aspect Ratio)
+
+        // VIDEO PREVIEW
         item {
             Card(
                 modifier = Modifier
@@ -128,11 +129,19 @@ fun VideoClipScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .border(
                         1.5.dp,
-                        Brush.horizontalGradient(listOf(NeonCyan, NeonViolet, NeonMagenta)),
+                        Brush.horizontalGradient(
+                            listOf(
+                                NeonCyan,
+                                NeonViolet,
+                                NeonMagenta
+                            )
+                        ),
                         RoundedCornerShape(20.dp)
                     ),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.Black)
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.Black
+                )
             ) {
                 Box(
                     modifier = Modifier
@@ -140,12 +149,12 @@ fun VideoClipScreen(
                         .aspectRatio(16f / 9f)
                         .clip(RoundedCornerShape(20.dp))
                 ) {
-                    // Video Backdrop with Virtual Artist
-                    val avatarRes = if (selectedSong?.vocalGender == "MALE") {
-                        R.drawable.img_virtual_male_artist
-                    } else {
-                        R.drawable.img_virtual_female_artist
-                    }
+                    val avatarRes =
+                        if (selectedSong?.vocalGender == "MALE") {
+                            R.drawable.img_virtual_male_artist
+                        } else {
+                            R.drawable.img_virtual_female_artist
+                        }
 
                     Image(
                         painter = painterResource(id = avatarRes),
@@ -156,7 +165,6 @@ fun VideoClipScreen(
                         contentScale = ContentScale.Crop
                     )
 
-                    // Cinematic Gradient Overlays & Stage Lights
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -171,7 +179,6 @@ fun VideoClipScreen(
                             )
                     )
 
-                    // Top Bar: Timecode & Live Recording Tag
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -180,19 +187,35 @@ fun VideoClipScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(if (isPlaying) Color.Red else TextMuted)
+                                    .background(
+                                        if (isPlaying) Color.Red
+                                        else TextMuted
+                                    )
                             )
+
                             Spacer(modifier = Modifier.width(6.dp))
+
                             Text(
-                                text = if (isPlaying) "CANLI KLİP OYNATILIYOR" else "KLİP ÖNİZLEME",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = if (isPlaying) Color.Red else TextSecondary,
-                                letterSpacing = 1.sp
+                                text = if (isPlaying) {
+                                    "CANLI KLİP OYNATILIYOR"
+                                } else {
+                                    "KLİP ÖNİZLEME"
+                                },
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = if (isPlaying) {
+                                    Color.Red
+                                } else {
+                                    TextSecondary
+                                }
                             )
                         }
 
@@ -203,17 +226,21 @@ fun VideoClipScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(Color.Black.copy(alpha = 0.6f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                .padding(
+                                    horizontal = 6.dp,
+                                    vertical = 2.dp
+                                )
                         )
                     }
 
-                    // Center Play/Stop Button
                     Box(
                         modifier = Modifier
                             .size(54.dp)
                             .clip(CircleShape)
                             .background(
-                                Brush.linearGradient(listOf(NeonCyan, NeonMagenta))
+                                Brush.linearGradient(
+                                    listOf(NeonCyan, NeonMagenta)
+                                )
                             )
                             .align(Alignment.Center)
                             .clickable {
@@ -229,14 +256,17 @@ fun VideoClipScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
+                            imageVector = if (isPlaying) {
+                                Icons.Default.Stop
+                            } else {
+                                Icons.Default.PlayArrow
+                            },
                             contentDescription = "Oynat / Durdur",
                             tint = Color.White,
                             modifier = Modifier.size(32.dp)
                         )
                     }
 
-                    // Bottom Lyrics Subtitles & Waveform in Video
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -245,8 +275,14 @@ fun VideoClipScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = if (isPlaying) "🎤 \"${currentSection}\"" else "🎵 Şarkı ve klip seçip oynatın",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            text = if (isPlaying) {
+                                "🎤 \"$currentSection\""
+                            } else {
+                                "🎵 Şarkı ve klip seçip oynatın"
+                            },
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
                             color = NeonAmber,
                             textAlign = TextAlign.Center,
                             maxLines = 1
@@ -254,7 +290,6 @@ fun VideoClipScreen(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        // Audio Waveform in video player
                         AudioVisualizerWaveform(
                             amplitudes = amplitudes,
                             isPlaying = isPlaying,
@@ -266,19 +301,25 @@ fun VideoClipScreen(
             }
         }
 
-        // Song Selection for Video
+        // SONG SELECTION
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                colors = CardDefaults.cardColors(
+                    containerColor = StudioCardBg
+                )
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
                     Text(
                         text = "Klip İçin Şarkı Seçin",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
                         color = TextPrimary
                     )
 
@@ -295,26 +336,49 @@ fun VideoClipScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(allSongs) { song ->
-                                val isSelected = song.id == selectedSong?.id
+                                val isSelected =
+                                    song.id == selectedSong?.id
+
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isSelected) NeonViolet else StudioSurfaceVariant)
+                                        .background(
+                                            if (isSelected) {
+                                                NeonViolet
+                                            } else {
+                                                StudioSurfaceVariant
+                                            }
+                                        )
                                         .clickable {
-                                            viewModel.videoSelectedSong.value = song
+                                            viewModel.videoSelectedSong.value =
+                                                song
                                         }
-                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        .padding(
+                                            horizontal = 12.dp,
+                                            vertical = 8.dp
+                                        )
                                 ) {
                                     Column {
                                         Text(
                                             text = song.title,
-                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                                            color = if (isSelected) Color.White else TextPrimary
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontWeight = FontWeight.Bold
+                                            ),
+                                            color = if (isSelected) {
+                                                Color.White
+                                            } else {
+                                                TextPrimary
+                                            }
                                         )
+
                                         Text(
                                             text = song.genre,
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = if (isSelected) NeonCyan else TextMuted
+                                            color = if (isSelected) {
+                                                NeonCyan
+                                            } else {
+                                                TextMuted
+                                            }
                                         )
                                     }
                                 }
@@ -325,14 +389,21 @@ fun VideoClipScreen(
             }
         }
 
-        // Visual Style Selection
+        // VIDEO STYLE
         item {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(
                     text = "Video Klip Görsel Yönetmenliği & Tarz",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
                     color = TextPrimary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(
+                        horizontal = 16.dp,
+                        vertical = 4.dp
+                    )
                 )
 
                 LazyRow(
@@ -342,24 +413,48 @@ fun VideoClipScreen(
                 ) {
                     items(videoStyles) { style ->
                         val isSelected = style == visualStyle
+
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) NeonCyan.copy(alpha = 0.2f) else StudioCardBg)
+                                .background(
+                                    if (isSelected) {
+                                        NeonCyan.copy(alpha = 0.2f)
+                                    } else {
+                                        StudioCardBg
+                                    }
+                                )
                                 .border(
                                     1.dp,
-                                    if (isSelected) NeonCyan else StudioSurfaceVariant,
+                                    if (isSelected) {
+                                        NeonCyan
+                                    } else {
+                                        StudioSurfaceVariant
+                                    },
                                     RoundedCornerShape(12.dp)
                                 )
-                                .clickable { viewModel.videoVisualStyle.value = style }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .clickable {
+                                    viewModel.videoVisualStyle.value = style
+                                }
+                                .padding(
+                                    horizontal = 12.dp,
+                                    vertical = 8.dp
+                                )
                         ) {
                             Text(
                                 text = style,
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    fontWeight = if (isSelected) {
+                                        FontWeight.Bold
+                                    } else {
+                                        FontWeight.Normal
+                                    }
                                 ),
-                                color = if (isSelected) NeonCyan else TextSecondary
+                                color = if (isSelected) {
+                                    NeonCyan
+                                } else {
+                                    TextSecondary
+                                }
                             )
                         }
                     }
@@ -367,7 +462,7 @@ fun VideoClipScreen(
             }
         }
 
-        // Generate Storyboard Action
+        // GENERATE STORYBOARD
         item {
             Box(
                 modifier = Modifier
@@ -376,12 +471,16 @@ fun VideoClipScreen(
             ) {
                 Button(
                     onClick = {
-                        val songToUse = selectedSong ?: allSongs.firstOrNull() ?: SongItem(
-                            title = "Gece Yolculuğu",
-                            lyrics = "Gece çökerken şehre...",
-                            genre = "Pop & EDM",
-                            mood = "Enerjik"
-                        )
+                        val songToUse =
+                            selectedSong
+                                ?: allSongs.firstOrNull()
+                                ?: SongItem(
+                                    title = "Gece Yolculuğu",
+                                    lyrics = "Gece çökerken şehre...",
+                                    genre = "Pop & EDM",
+                                    mood = "Enerjik"
+                                )
+
                         viewModel.generateVideoStoryboard(songToUse)
                     },
                     enabled = !isGenerating,
@@ -390,7 +489,9 @@ fun VideoClipScreen(
                         .height(54.dp)
                         .testTag("generate_video_button"),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Transparent
+                    ),
                     contentPadding = PaddingValues(0.dp)
                 ) {
                     Box(
@@ -398,37 +499,53 @@ fun VideoClipScreen(
                             .fillMaxSize()
                             .background(
                                 Brush.horizontalGradient(
-                                    listOf(NeonViolet, NeonMagenta, NeonCyan)
+                                    listOf(
+                                        NeonViolet,
+                                        NeonMagenta,
+                                        NeonCyan
+                                    )
                                 )
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         if (isGenerating) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 CircularProgressIndicator(
                                     color = Color.White,
                                     modifier = Modifier.size(20.dp),
                                     strokeWidth = 2.dp
                                 )
+
                                 Spacer(modifier = Modifier.width(10.dp))
+
                                 Text(
                                     text = "AI Video Storyboard Üretiliyor...",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
                                     color = Color.White
                                 )
                             }
                         } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Movie,
                                     contentDescription = null,
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp)
                                 )
+
                                 Spacer(modifier = Modifier.width(8.dp))
+
                                 Text(
                                     text = "AI VİDEO KLİP STORYBOARD OLUŞTUR",
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
                                     color = Color.White
                                 )
                             }
@@ -438,15 +555,82 @@ fun VideoClipScreen(
             }
         }
 
-        // Storyboard Scenes List
+        // GENERATION STATUS AND ERROR MESSAGE
+        if (generationMessage.isNotBlank()) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .border(
+                            1.dp,
+                            if (
+                                generationMessage.contains(
+                                    "hata",
+                                    ignoreCase = true
+                                )
+                            ) {
+                                NeonMagenta
+                            } else {
+                                NeonCyan
+                            },
+                            RoundedCornerShape(12.dp)
+                        ),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = StudioCardBg
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isGenerating) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = NeonCyan,
+                                strokeWidth = 2.dp
+                            )
+
+                            Spacer(modifier = Modifier.width(10.dp))
+                        }
+
+                        Text(
+                            text = generationMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (
+                                generationMessage.contains(
+                                    "hata",
+                                    ignoreCase = true
+                                )
+                            ) {
+                                NeonMagenta
+                            } else {
+                                NeonCyan
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        // STORYBOARD RESULT
         if (generatedStoryboard != null) {
             val sb = generatedStoryboard!!
+
             item {
                 Text(
                     text = "🎬 ${sb.conceptTitle}",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
                     color = TextPrimary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(
+                        horizontal = 16.dp,
+                        vertical = 4.dp
+                    )
                 )
             }
 
@@ -456,9 +640,13 @@ fun VideoClipScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                    colors = CardDefaults.cardColors(
+                        containerColor = StudioCardBg
+                    )
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Column(
+                        modifier = Modifier.padding(14.dp)
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -466,9 +654,12 @@ fun VideoClipScreen(
                         ) {
                             Text(
                                 text = "Sahne ${scene.sceneNumber}: ${scene.sectionName}",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
                                 color = NeonAmber
                             )
+
                             Text(
                                 text = scene.timeCode,
                                 style = MaterialTheme.typography.labelSmall,
@@ -476,23 +667,32 @@ fun VideoClipScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(4.dp))
                                     .background(StudioSurfaceVariant)
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .padding(
+                                        horizontal = 6.dp,
+                                        vertical = 2.dp
+                                    )
                             )
                         }
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.CameraAlt,
                                 contentDescription = null,
                                 tint = NeonMagenta,
                                 modifier = Modifier.size(14.dp)
                             )
+
                             Spacer(modifier = Modifier.width(4.dp))
+
                             Text(
                                 text = scene.cameraAngle,
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                ),
                                 color = NeonMagenta
                             )
                         }
@@ -511,15 +711,22 @@ fun VideoClipScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(StudioSurfaceVariant.copy(alpha = 0.6f))
+                                .background(
+                                    StudioSurfaceVariant.copy(alpha = 0.6f)
+                                )
                                 .padding(8.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
                                     text = "💡 Işık & Atmosfer: ",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
                                     color = TextMuted
                                 )
+
                                 Text(
                                     text = scene.lightingVibe,
                                     style = MaterialTheme.typography.labelSmall,
