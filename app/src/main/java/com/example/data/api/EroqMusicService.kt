@@ -25,8 +25,8 @@ class EroqMusicService {
         private const val JSON_MEDIA_TYPE =
             "application/json; charset=utf-8"
 
-        private const val POLL_INTERVAL_MS = 4000L
-        private const val MAX_POLL_ATTEMPTS = 120
+        private const val POLL_INTERVAL_MS = 5000L
+        private const val MAX_POLL_ATTEMPTS = 60
     }
 
     private val client = OkHttpClient.Builder()
@@ -77,11 +77,8 @@ class EroqMusicService {
             "Geçersiz müzik iş kimliği."
         }
 
-        val url =
-            "$BASE_URL/api/music/status/${jobId}"
-
         val request = Request.Builder()
-            .url(url)
+            .url("$BASE_URL/api/music/status/$jobId")
             .get()
             .header("Accept", "application/json")
             .build()
@@ -107,106 +104,136 @@ class EroqMusicService {
             instrumental = instrumental
         )
 
-        val jobs = generation.optJSONArray("jobs")
+        val jobId = extractJobId(generation)
             ?: throw IOException(
-                "Eroq sunucusu müzik iş listesini döndürmedi."
+                "Eroq üretim isteğini kabul etti ancak iş kimliği bulunamadı. Yanıt: $generation"
             )
-
-        if (jobs.length() == 0) {
-            throw IOException(
-                "Eroq sunucusundan müzik iş kimliği alınamadı."
-            )
-        }
-
-        val firstJob = jobs.optJSONObject(0)
-            ?: throw IOException("Müzik iş bilgisi okunamadı.")
-
-        val jobId = firstJob.optString("id", "")
-
-        if (jobId.isBlank()) {
-            throw IOException("Müzik iş kimliği boş geldi.")
-        }
 
         repeat(MAX_POLL_ATTEMPTS) {
 
             delay(POLL_INTERVAL_MS)
 
             val statusResult = getMusicStatus(jobId)
-            val status = statusResult
-                .optString("status", "")
+            val status = statusResult.optString("status", "")
                 .lowercase()
 
-            when (status) {
+            val audioUrl = findAudioUrl(statusResult)
 
-                "succeeded", "completed", "success" -> {
-                    val audioUrl = extractAudioUrl(
-                        statusResult.optJSONArray("data")
-                    )
-
-                    if (audioUrl.isBlank()) {
-                        throw IOException(
-                            "Şarkı hazırlandı ancak MP3 bağlantısı bulunamadı."
-                        )
-                    }
-
-                    return statusResult.put("audioUrl", audioUrl)
+            if (!audioUrl.isNullOrBlank()) {
+                return JSONObject().apply {
+                    put("ok", true)
+                    put("id", jobId)
+                    put("status", status)
+                    put("title", statusResult.optString("title", title))
+                    put("audioUrl", audioUrl)
+                    put("seconds", statusResult.optInt("seconds", seconds))
+                    put("rawResponse", statusResult)
                 }
+            }
 
-                "failed", "error", "cancelled", "canceled" -> {
-                    val error = statusResult.optJSONObject("error")
-                        ?.optString("message")
-                        ?: statusResult.optString(
-                            "error",
-                            "Eroq müzik üretimi başarısız oldu."
-                        )
-
-                    throw IOException(error)
-                }
+            if (
+                status.contains("fail") ||
+                status.contains("error") ||
+                status.contains("cancel")
+            ) {
+                throw IOException(
+                    "Eroq müzik üretimi başarısız: $status"
+                )
             }
         }
 
         throw IOException(
-            "Müzik üretimi beklenen sürede tamamlanmadı. Daha sonra tekrar kontrol et."
+            "Müzik üretimi zaman aşımına uğradı. Daha sonra durum tekrar kontrol edilmeli."
         )
     }
 
-    private fun extractAudioUrl(data: JSONArray?): String {
+    private fun extractJobId(response: JSONObject): String? {
 
-        if (data == null || data.length() == 0) {
-            return ""
-        }
+        val jobs = response.optJSONArray("jobs")
 
-        for (index in 0 until data.length()) {
+        if (jobs != null) {
+            for (i in 0 until jobs.length()) {
+                val item = jobs.optJSONObject(i)
 
-            val item = data.optJSONObject(index) ?: continue
+                if (item != null) {
+                    val id = item.optString("id", "")
+                        .ifBlank { item.optString("job_id", "") }
+                        .ifBlank { item.optString("jobId", "") }
 
-            val possibleUrlKeys = listOf(
-                "url",
-                "audio_url",
-                "audioUrl",
-                "mp3_url",
-                "download_url",
-                "downloadUrl"
-            )
+                    if (id.isNotBlank()) return id
+                }
 
-            for (key in possibleUrlKeys) {
-                val url = item.optString(key, "")
-
-                if (
-                    url.startsWith("https://") ||
-                    url.startsWith("http://")
-                ) {
-                    return url
+                val directValue = jobs.optString(i, "")
+                if (directValue.isNotBlank() && directValue != "null") {
+                    return directValue
                 }
             }
         }
 
-        return ""
+        val directId = response.optString("id", "")
+            .ifBlank { response.optString("job_id", "") }
+            .ifBlank { response.optString("jobId", "") }
+
+        return directId.takeIf { it.isNotBlank() }
     }
 
-    private fun executeRequest(
-        request: Request
-    ): JSONObject {
+    private fun findAudioUrl(json: JSONObject): String? {
+
+        val directKeys = listOf(
+            "audioUrl",
+            "audio_url",
+            "url",
+            "mp3",
+            "download_url",
+            "downloadUrl"
+        )
+
+        for (key in directKeys) {
+            val value = json.optString(key, "")
+            if (isAudioUrl(value)) return value
+        }
+
+        val data = json.opt("data")
+
+        when (data) {
+            is JSONObject -> {
+                findAudioUrl(data)?.let { return it }
+            }
+
+            is JSONArray -> {
+                for (i in 0 until data.length()) {
+                    val item = data.optJSONObject(i)
+                    if (item != null) {
+                        findAudioUrl(item)?.let { return it }
+                    }
+                }
+            }
+        }
+
+        val jobs = json.optJSONArray("jobs")
+        if (jobs != null) {
+            for (i in 0 until jobs.length()) {
+                val item = jobs.optJSONObject(i)
+                if (item != null) {
+                    findAudioUrl(item)?.let { return it }
+                }
+            }
+        }
+
+        val result = json.optJSONObject("result")
+        if (result != null) {
+            findAudioUrl(result)?.let { return it }
+        }
+
+        return null
+    }
+
+    private fun isAudioUrl(value: String): Boolean {
+        return value.startsWith("https://") ||
+            value.startsWith("http://")
+    }
+
+    private fun executeRequest(request: Request): JSONObject {
 
         client.newCall(request).execute().use { response ->
 
@@ -222,15 +249,12 @@ class EroqMusicService {
             }
 
             if (!response.isSuccessful || !json.optBoolean("ok", false)) {
-
                 val error = json.optString(
                     "error",
                     "Müzik sunucusu isteği başarısız oldu."
                 )
 
-                throw IOException(
-                    "HTTP ${response.code}: $error"
-                )
+                throw IOException("HTTP ${response.code}: $error")
             }
 
             return json
