@@ -48,7 +48,7 @@ class MusicStudioViewModel(application: Application) :
     private val geminiService = GeminiMusicService()
     private val eroqService = EroqMusicService()
 
-    val audioEngine = AudioSynthesisEngine()
+    val audioEngine = AudioSynthesisEngine(application)
     val voiceRecorder = UserVoiceRecorder(application)
     val showVoiceRecordingDialog = MutableStateFlow(false)
 
