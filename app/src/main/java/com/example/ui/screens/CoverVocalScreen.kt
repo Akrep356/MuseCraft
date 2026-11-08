@@ -1,3 +1,4 @@
+
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
@@ -54,14 +55,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.model.MusicGenre
-import com.example.model.PresetVocalTones
-import com.example.model.SongItem
-import com.example.model.VocalGender
 import com.example.ui.components.AudioVisualizerWaveform
 import com.example.ui.components.GenreSelectorChips
 import com.example.ui.components.VocalToneSelectorCard
-import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonGreen
 import com.example.ui.theme.NeonMagenta
@@ -82,8 +78,12 @@ fun CoverVocalScreen(
     val targetGenre by viewModel.coverTargetGenre.collectAsState()
     val targetVocal by viewModel.coverTargetVocal.collectAsState()
     val coverNotes by viewModel.coverNotes.collectAsState()
+
     val isGenerating by viewModel.isGeneratingCover.collectAsState()
     val generatedCover by viewModel.generatedCover.collectAsState()
+    val generatedAudioUrl by viewModel.generatedCoverAudioUrl.collectAsState()
+    val coverMessage by viewModel.coverMessage.collectAsState()
+
     val isPlaying by viewModel.audioEngine.isPlaying.collectAsState()
     val amplitudes by viewModel.audioEngine.visualizerAmplitudes.collectAsState()
 
@@ -104,7 +104,6 @@ fun CoverVocalScreen(
             .padding(bottom = 72.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
         item {
             Card(
                 modifier = Modifier
@@ -124,13 +123,17 @@ fun CoverVocalScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "AI COVER & VOKAL STÜDYOSU",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
                             color = TextPrimary
                         )
                     }
+
                     Spacer(modifier = Modifier.height(4.dp))
+
                     Text(
-                        text = "Herhangi bir şarkıyı dilediğin tarza ve erkek/kadın vokal sesine dönüştür.",
+                        text = "Bir şarkı temasını yeni müzik türü ve AI vokalle yeniden yorumla.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -138,7 +141,6 @@ fun CoverVocalScreen(
             }
         }
 
-        // Original Song input
         item {
             Card(
                 modifier = Modifier
@@ -150,17 +152,28 @@ fun CoverVocalScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "Cover Yapılacak Şarkı veya Tema",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
                         color = TextPrimary
                     )
+
                     Spacer(modifier = Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = originalTitle,
-                        onValueChange = { viewModel.coverOriginalTitle.value = it },
+                        onValueChange = {
+                            viewModel.coverOriginalTitle.value = it
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("cover_original_input"),
-                        placeholder = { Text("Şarkı adı veya sözleri gir...", color = TextMuted) },
+                        placeholder = {
+                            Text(
+                                "Şarkı adı veya tema gir...",
+                                color = TextMuted
+                            )
+                        },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = NeonMagenta,
                             unfocusedBorderColor = StudioSurfaceVariant,
@@ -177,7 +190,9 @@ fun CoverVocalScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = TextMuted
                     )
+
                     Spacer(modifier = Modifier.height(4.dp))
+
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -186,8 +201,13 @@ fun CoverVocalScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(StudioSurfaceVariant)
-                                    .clickable { viewModel.coverOriginalTitle.value = song }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    .clickable {
+                                        viewModel.coverOriginalTitle.value = song
+                                    }
+                                    .padding(
+                                        horizontal = 8.dp,
+                                        vertical = 4.dp
+                                    )
                             ) {
                                 Text(
                                     text = song,
@@ -201,35 +221,47 @@ fun CoverVocalScreen(
             }
         }
 
-        // Target Genre Selection
         item {
             Column {
                 Text(
                     text = "Dönüştürülecek Yeni Müzik Türü",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
                     color = TextPrimary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(
+                        horizontal = 16.dp,
+                        vertical = 4.dp
+                    )
                 )
+
                 GenreSelectorChips(
                     selectedGenre = targetGenre,
-                    onSelectGenre = { viewModel.coverTargetGenre.value = it }
+                    onSelectGenre = {
+                        viewModel.coverTargetGenre.value = it
+                    }
                 )
             }
         }
 
-        // Vocalist Selection (Male / Female / User Voice)
         item {
             VocalToneSelectorCard(
                 selectedTone = targetVocal,
-                onSelectTone = { viewModel.coverTargetVocal.value = it },
-                onRecordVoiceClick = { viewModel.showVoiceRecordingDialog.value = true }
+                onSelectTone = {
+                    viewModel.coverTargetVocal.value = it
+                },
+                onRecordVoiceClick = {
+                    viewModel.showVoiceRecordingDialog.value = true
+                }
             )
         }
 
-        // User Voice Recording Callout Banner for Cover
         item {
-            val hasRecordedUserVoice by viewModel.voiceRecorder.hasRecording.collectAsState()
-            val isCustomVoiceSelected = targetVocal.id == "user_own_voice"
+            val hasRecordedUserVoice by
+                viewModel.voiceRecorder.hasRecording.collectAsState()
+
+            val isCustomVoiceSelected =
+                targetVocal.id == "user_own_voice"
 
             Card(
                 modifier = Modifier
@@ -237,13 +269,19 @@ fun CoverVocalScreen(
                     .padding(horizontal = 16.dp)
                     .border(
                         1.5.dp,
-                        Brush.horizontalGradient(listOf(NeonCyan, NeonMagenta)),
+                        Brush.horizontalGradient(
+                            listOf(NeonCyan, NeonMagenta)
+                        ),
                         RoundedCornerShape(16.dp)
                     )
-                    .clickable { viewModel.showVoiceRecordingDialog.value = true }
+                    .clickable {
+                        viewModel.showVoiceRecordingDialog.value = true
+                    }
                     .testTag("cover_user_voice_banner_card"),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioSurfaceVariant.copy(alpha = 0.7f))
+                colors = CardDefaults.cardColors(
+                    containerColor = StudioSurfaceVariant.copy(alpha = 0.7f)
+                )
             ) {
                 Row(
                     modifier = Modifier
@@ -256,7 +294,9 @@ fun CoverVocalScreen(
                             .size(46.dp)
                             .clip(CircleShape)
                             .background(
-                                Brush.linearGradient(listOf(NeonCyan, NeonMagenta))
+                                Brush.linearGradient(
+                                    listOf(NeonCyan, NeonMagenta)
+                                )
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -274,28 +314,41 @@ fun CoverVocalScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "Cover'ı Kendi Sesinle Söylet",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
                                 color = TextPrimary
                             )
+
                             Spacer(modifier = Modifier.width(6.dp))
+
                             if (isCustomVoiceSelected) {
                                 Text(
                                     text = "AKTİF",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
                                     color = NeonGreen,
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(4.dp))
-                                        .background(NeonGreen.copy(alpha = 0.2f))
-                                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                                        .background(
+                                            NeonGreen.copy(alpha = 0.2f)
+                                        )
+                                        .padding(
+                                            horizontal = 6.dp,
+                                            vertical = 1.dp
+                                        )
                                 )
                             }
                         }
+
                         Spacer(modifier = Modifier.height(2.dp))
+
                         Text(
                             text = if (hasRecordedUserVoice) {
-                                "Kaydedilmiş ses modelin hazır! Şarkıyı kendi ses renginle cover'lat."
+                                "Kaydedilmiş ses modelin hazır."
                             } else {
-                                "Mikrofondan sesini kaydet, AI bu şarkıyı senin ses tonunla cover'lasın."
+                                "Kendi sesini kaydetmek için bu alanı kullanabilirsin."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
@@ -305,10 +358,17 @@ fun CoverVocalScreen(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     Button(
-                        onClick = { viewModel.showVoiceRecordingDialog.value = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                        onClick = {
+                            viewModel.showVoiceRecordingDialog.value = true
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = NeonCyan
+                        ),
                         shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        contentPadding = PaddingValues(
+                            horizontal = 10.dp,
+                            vertical = 6.dp
+                        ),
                         modifier = Modifier.testTag("cover_voice_record_btn")
                     ) {
                         Text(
@@ -322,7 +382,6 @@ fun CoverVocalScreen(
             }
         }
 
-        // Vocal Effects & Autotune Controls
         item {
             Card(
                 modifier = Modifier
@@ -334,7 +393,9 @@ fun CoverVocalScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "Vokal Efektleri & Tonlama",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
                         color = TextPrimary
                     )
 
@@ -344,9 +405,20 @@ fun CoverVocalScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("🎤 Autotune / Pitch Düzeltme", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                        Text("%${autotuneLevel.toInt()}", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = NeonCyan)
+                        Text(
+                            "🎤 Autotune / Pitch Düzeltme",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                        Text(
+                            "%${autotuneLevel.toInt()}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = NeonCyan
+                        )
                     }
+
                     Slider(
                         value = autotuneLevel,
                         onValueChange = { autotuneLevel = it },
@@ -364,9 +436,20 @@ fun CoverVocalScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("🌌 Stüdyo Reverb & Atmosfer", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                        Text("%${reverbLevel.toInt()}", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = NeonMagenta)
+                        Text(
+                            "🌌 Stüdyo Reverb & Atmosfer",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                        Text(
+                            "%${reverbLevel.toInt()}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = NeonMagenta
+                        )
                     }
+
                     Slider(
                         value = reverbLevel,
                         onValueChange = { reverbLevel = it },
@@ -381,72 +464,105 @@ fun CoverVocalScreen(
             }
         }
 
-        // Cover Generation Button
         item {
-            Box(
+            Button(
+                onClick = {
+                    viewModel.generateCover()
+                },
+                enabled = !isGenerating,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
+                    .height(54.dp)
+                    .testTag("generate_cover_button"),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Transparent
+                ),
+                contentPadding = PaddingValues(0.dp)
             ) {
-                Button(
-                    onClick = { viewModel.generateCover() },
-                    enabled = !isGenerating,
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp)
-                        .testTag("generate_cover_button"),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                    contentPadding = PaddingValues(0.dp)
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    NeonMagenta,
+                                    NeonViolet,
+                                    NeonCyan
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(NeonMagenta, NeonViolet, NeonCyan)
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isGenerating) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(
-                                    color = Color.White,
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = "AI Cover & Vokal Uyarlanıyor...",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White
-                                )
-                            }
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "AI İLE COVER & VOKAL OLUŞTUR",
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White
-                                )
-                            }
+                    if (isGenerating) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            Text(
+                                text = "AI Cover ve Gerçek Müzik Üretiliyor...",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = Color.White
+                            )
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Text(
+                                text = "AI İLE COVER & VOKAL OLUŞTUR",
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = Color.White
+                            )
                         }
                     }
                 }
             }
         }
 
-        // Generated Cover Result Card
+        // COVER STATUS MESSAGE
+        if (coverMessage.isNotBlank()) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = StudioSurfaceVariant
+                    )
+                ) {
+                    Text(
+                        text = coverMessage,
+                        modifier = Modifier.padding(14.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextPrimary
+                    )
+                }
+            }
+        }
+
+        // GENERATED COVER
         if (generatedCover != null) {
             val cover = generatedCover!!
+
             item {
                 Card(
                     modifier = Modifier
@@ -454,79 +570,118 @@ fun CoverVocalScreen(
                         .padding(horizontal = 16.dp)
                         .border(
                             1.dp,
-                            Brush.horizontalGradient(listOf(NeonMagenta, NeonCyan)),
+                            Brush.horizontalGradient(
+                                listOf(NeonMagenta, NeonCyan)
+                            ),
                             RoundedCornerShape(18.dp)
                         ),
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                    colors = CardDefaults.cardColors(
+                        containerColor = StudioCardBg
+                    )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "🎙️ ${cover.title}",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = TextPrimary
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = "${targetGenre.displayName} • ${targetVocal.name}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NeonMagenta
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = if (generatedAudioUrl.isNullOrBlank()) {
+                                "Gerçek MP3 henüz hazır değil."
+                            } else {
+                                "Gerçek MP3 hazır."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (generatedAudioUrl.isNullOrBlank()) {
+                                TextSecondary
+                            } else {
+                                NeonGreen
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "🎙️ " + cover.title,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = TextPrimary
+                            Button(
+                                onClick = {
+                                    viewModel.playGeneratedCover()
+                                },
+                                enabled = !generatedAudioUrl.isNullOrBlank(),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("play_cover_btn"),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = NeonMagenta
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(
+                                    horizontal = 10.dp,
+                                    vertical = 8.dp
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) {
+                                        Icons.Default.Stop
+                                    } else {
+                                        Icons.Default.PlayArrow
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+
+                                Spacer(modifier = Modifier.width(4.dp))
+
                                 Text(
-                                    text = "${targetGenre.displayName} • ${targetVocal.name}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = NeonMagenta
+                                    text = if (isPlaying) "Oynatılıyor" else "Çal",
+                                    fontSize = 12.sp
                                 )
                             }
 
-                            Row {
-                                Button(
-                                    onClick = {
-                                        val songItem = SongItem(
-                                            title = cover.title,
-                                            lyrics = cover.lyrics,
-                                            genre = targetGenre.displayName,
-                                            mood = "AI Cover",
-                                            tempoBpm = 126,
-                                            musicalKey = "E Minör",
-                                            chordProgression = cover.chordProgression,
-                                            vocalToneName = targetVocal.name,
-                                            vocalGender = targetVocal.gender.name,
-                                            isCover = true
-                                        )
-                                        viewModel.playSongAudio(songItem)
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = NeonMagenta),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                    modifier = Modifier.testTag("play_cover_btn")
-                                ) {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(if (isPlaying) "Durdur" else "Çal", fontSize = 12.sp)
-                                }
+                            Button(
+                                onClick = {
+                                    viewModel.saveGeneratedCover()
+                                },
+                                enabled = !generatedAudioUrl.isNullOrBlank(),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("save_cover_btn"),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = NeonGreen.copy(alpha = 0.2f),
+                                    contentColor = NeonGreen
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(
+                                    horizontal = 8.dp,
+                                    vertical = 8.dp
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.BookmarkAdd,
+                                    contentDescription = null,
+                                    tint = NeonGreen,
+                                    modifier = Modifier.size(18.dp)
+                                )
 
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
 
-                                Button(
-                                    onClick = { viewModel.saveGeneratedCover() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = NeonGreen.copy(alpha = 0.2f)),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                    modifier = Modifier.testTag("save_cover_btn")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.BookmarkAdd,
-                                        contentDescription = null,
-                                        tint = NeonGreen,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
+                                Text("Kaydet", fontSize = 12.sp)
                             }
                         }
 
@@ -539,7 +694,6 @@ fun CoverVocalScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Info
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -548,8 +702,17 @@ fun CoverVocalScreen(
                                 .padding(10.dp)
                         ) {
                             Column {
-                                Text("🎯 Aranje & Vokal Notu:", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                                Text(cover.vocalDirection, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                                Text(
+                                    "🎯 Aranje & Vokal Notu:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
+
+                                Text(
+                                    cover.vocalDirection,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextPrimary
+                                )
                             }
                         }
 
@@ -557,7 +720,9 @@ fun CoverVocalScreen(
 
                         Text(
                             text = "Cover Şarkı Sözleri & Bölümler",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
                             color = TextPrimary
                         )
 
@@ -567,12 +732,16 @@ fun CoverVocalScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(StudioSurfaceVariant.copy(alpha = 0.5f))
+                                .background(
+                                    StudioSurfaceVariant.copy(alpha = 0.5f)
+                                )
                                 .padding(12.dp)
                         ) {
                             Text(
                                 text = cover.lyrics,
-                                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    lineHeight = 22.sp
+                                ),
                                 color = TextPrimary
                             )
                         }
