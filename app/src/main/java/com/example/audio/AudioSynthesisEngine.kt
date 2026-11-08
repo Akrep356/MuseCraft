@@ -1,10 +1,12 @@
 
 package com.example.audio
 
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.MediaPlayer
+import android.net.Uri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,8 +17,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.sin
+import java.io.File
 
-class AudioSynthesisEngine {
+class AudioSynthesisEngine(
+    private val context: Context
+) {
 
     private val sampleRate = 44100
     private var audioTrack: AudioTrack? = null
@@ -56,7 +61,7 @@ class AudioSynthesisEngine {
         _currentBpm.value = bpm.coerceIn(60, 180)
     }
 
-    // GERÇEK EROQ MP3 VEYA TELEFONDAKİ MP3 DOSYASINI ÇAL
+    // GERÇEK EROQ MP3 BAĞLANTISINI ÇAL
     fun playUrl(url: String, bpm: Int = 120) {
         if (url.isBlank()) {
             _playbackError.value = "MP3 bağlantısı boş."
@@ -66,12 +71,12 @@ class AudioSynthesisEngine {
         stopTrack()
         _playbackError.value = null
         _currentBpm.value = bpm.coerceIn(60, 180)
-        _currentPlayingSection.value = "Eroq Music One • Hazırlanıyor"
+        _currentPlayingSection.value =
+            "Eroq Music One • Hazırlanıyor"
         _isPreparing.value = true
 
         try {
             val player = MediaPlayer()
-
             mediaPlayer = player
 
             player.setAudioAttributes(
@@ -136,14 +141,99 @@ class AudioSynthesisEngine {
         }
     }
 
-    // TELEFONA KAYDEDİLMİŞ MP3 DOSYASINI ÇAL
+    // TELEFONDAKİ DOSYAYI VEYA CONTENT URI'Yİ ÇAL
     fun playFile(filePath: String, bpm: Int = 120) {
         if (filePath.isBlank()) {
             _playbackError.value = "MP3 dosya yolu boş."
             return
         }
 
-        playUrl(filePath, bpm)
+        stopTrack()
+        _playbackError.value = null
+        _currentBpm.value = bpm.coerceIn(60, 180)
+        _currentPlayingSection.value = "Telefon MP3 • Hazırlanıyor"
+        _isPreparing.value = true
+
+        try {
+            val player = MediaPlayer()
+            mediaPlayer = player
+
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+            )
+
+            player.setOnPreparedListener { preparedPlayer ->
+                if (mediaPlayer !== preparedPlayer) {
+                    return@setOnPreparedListener
+                }
+
+                try {
+                    val duration =
+                        preparedPlayer.duration.coerceAtLeast(0) / 1000f
+
+                    if (duration > 0f) {
+                        _totalDurationSec.value = duration
+                    }
+
+                    _currentPlaybackTimeSec.value = 0f
+                    _isPreparing.value = false
+                    _isPlaying.value = true
+                    _currentPlayingSection.value =
+                        "Telefon MP3 • Çalıyor"
+
+                    preparedPlayer.start()
+                    startProgressUpdates()
+
+                } catch (e: Exception) {
+                    _playbackError.value =
+                        "İndirilen MP3 başlatılamadı: ${e.message}"
+                    stopTrack()
+                }
+            }
+
+            player.setOnCompletionListener { completedPlayer ->
+                if (mediaPlayer === completedPlayer) {
+                    stopTrack()
+                    _currentPlayingSection.value = "Şarkı tamamlandı"
+                }
+            }
+
+            player.setOnErrorListener { errorPlayer, what, extra ->
+                if (mediaPlayer === errorPlayer) {
+                    _playbackError.value =
+                        "Yerel MP3 oynatma hatası. Kod: $what / $extra"
+                    stopTrack()
+                }
+                true
+            }
+
+            if (filePath.startsWith("content://")) {
+                player.setDataSource(
+                    context,
+                    Uri.parse(filePath)
+                )
+            } else {
+                val file = File(filePath)
+
+                if (!file.exists() || !file.isFile) {
+                    throw IllegalStateException(
+                        "MP3 dosyası telefonda bulunamadı."
+                    )
+                }
+
+                player.setDataSource(file.absolutePath)
+            }
+
+            player.prepareAsync()
+
+        } catch (e: Exception) {
+            _playbackError.value =
+                "Telefon MP3 dosyası açılamadı: ${e.message}"
+            stopTrack()
+        }
     }
 
     // DURAKLAT
@@ -174,7 +264,7 @@ class AudioSynthesisEngine {
                 player.start()
                 _isPlaying.value = true
                 _currentPlayingSection.value =
-                    "Eroq Music One • Gerçek MP3 çalıyor"
+                    "Gerçek MP3 çalıyor"
                 startProgressUpdates()
                 return
             }
@@ -189,7 +279,6 @@ class AudioSynthesisEngine {
         }
     }
 
-    // GERÇEK MP3 İÇİN OYNATMA DURUMUNU DEĞİŞTİR
     fun toggleRealPlayback() {
         if (_isPreparing.value) return
 
@@ -228,7 +317,6 @@ class AudioSynthesisEngine {
     }
 
     // ESKİ SENTETİK SES MOTORU
-    // Eski ekranların çalışması için geçici olarak korunmuştur.
     fun playTrack(
         genre: String = "Pop & Dance",
         musicalKey: String = "A Minör",
