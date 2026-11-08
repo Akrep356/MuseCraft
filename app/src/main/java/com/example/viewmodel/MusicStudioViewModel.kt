@@ -52,7 +52,6 @@ class MusicStudioViewModel(application: Application) :
     val voiceRecorder = UserVoiceRecorder(application)
     val showVoiceRecordingDialog = MutableStateFlow(false)
 
-    // NAVIGATION
     private val _currentTab = MutableStateFlow(StudioTab.COMPOSE)
     val currentTab = _currentTab.asStateFlow()
 
@@ -60,58 +59,45 @@ class MusicStudioViewModel(application: Application) :
         _currentTab.value = tab
     }
 
-    // DATABASE
-    val allSongs = db.songDao().getAllSongs()
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            emptyList()
-        )
+    val allSongs = db.songDao().getAllSongs().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
 
-    val allArtists = db.virtualArtistDao().getAllArtists()
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            emptyList()
-        )
+    val allArtists = db.virtualArtistDao().getAllArtists().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
 
-    val allStoryboards = db.videoStoryboardDao().getAllStoryboards()
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            emptyList()
-        )
+    val allStoryboards = db.videoStoryboardDao().getAllStoryboards().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
 
-    // COMPOSE STATE
-    val composeTheme =
-        MutableStateFlow("Gece sürüşü, neon ışıklar ve özlem")
-
+    // COMPOSE
+    val composeTheme = MutableStateFlow("Gece sürüşü, neon ışıklar ve özlem")
     val composeGenre = MutableStateFlow(MusicGenre.POP)
     val composeMood = MutableStateFlow("Enerjik & Melankolik")
-    val composeVocalTone =
-        MutableStateFlow(PresetVocalTones.tones[4])
-
+    val composeVocalTone = MutableStateFlow(PresetVocalTones.tones[4])
     val composeKey = MutableStateFlow("A Minör")
     val composeBpm = MutableStateFlow(124)
 
     private val _isGeneratingSong = MutableStateFlow(false)
     val isGeneratingSong = _isGeneratingSong.asStateFlow()
 
-    private val _generatedSong =
-        MutableStateFlow<SongGenerationResult?>(null)
-
+    private val _generatedSong = MutableStateFlow<SongGenerationResult?>(null)
     val generatedSong = _generatedSong.asStateFlow()
 
-    private val _generatedSongAudioUrl =
-        MutableStateFlow<String?>(null)
-
-    val generatedSongAudioUrl =
-        _generatedSongAudioUrl.asStateFlow()
+    private val _generatedSongAudioUrl = MutableStateFlow<String?>(null)
+    val generatedSongAudioUrl = _generatedSongAudioUrl.asStateFlow()
 
     private val _generationMessage = MutableStateFlow("")
     val generationMessage = _generationMessage.asStateFlow()
 
-    // REAL AUDIO STATE
+    // AUDIO
     val isAudioPlaying = audioEngine.isPlaying
     val isAudioPreparing = audioEngine.isPreparing
     val audioPlaybackError = audioEngine.playbackError
@@ -119,7 +105,7 @@ class MusicStudioViewModel(application: Application) :
     val totalPlaybackDuration = audioEngine.totalDurationSec
     val visualizerAmplitudes = audioEngine.visualizerAmplitudes
 
-    // DOWNLOAD STATE
+    // DOWNLOAD
     private val _downloadingSongId = MutableStateFlow<String?>(null)
     val downloadingSongId = _downloadingSongId.asStateFlow()
 
@@ -129,16 +115,10 @@ class MusicStudioViewModel(application: Application) :
     private val _downloadProgress = MutableStateFlow(0)
     val downloadProgress = _downloadProgress.asStateFlow()
 
-    // COVER STATE
-    val coverOriginalTitle =
-        MutableStateFlow("Unutabilsem / Gece Masalı")
-
-    val coverTargetGenre =
-        MutableStateFlow(MusicGenre.EDM_ELECTRONIC)
-
-    val coverTargetVocal =
-        MutableStateFlow(PresetVocalTones.tones[0])
-
+    // COVER
+    val coverOriginalTitle = MutableStateFlow("Unutabilsem / Gece Masalı")
+    val coverTargetGenre = MutableStateFlow(MusicGenre.EDM_ELECTRONIC)
+    val coverTargetVocal = MutableStateFlow(PresetVocalTones.tones[0])
     val coverNotes = MutableStateFlow(
         "Daha yüksek BPM, synthwave basları ve duygusal tiz vokaller"
     )
@@ -146,36 +126,30 @@ class MusicStudioViewModel(application: Application) :
     private val _isGeneratingCover = MutableStateFlow(false)
     val isGeneratingCover = _isGeneratingCover.asStateFlow()
 
-    private val _generatedCover =
-        MutableStateFlow<SongGenerationResult?>(null)
-
+    private val _generatedCover = MutableStateFlow<SongGenerationResult?>(null)
     val generatedCover = _generatedCover.asStateFlow()
+
+    private val _generatedCoverAudioUrl = MutableStateFlow<String?>(null)
+    val generatedCoverAudioUrl = _generatedCoverAudioUrl.asStateFlow()
+
+    private val _coverMessage = MutableStateFlow("")
+    val coverMessage = _coverMessage.asStateFlow()
 
     // VIRTUAL ARTIST
     val artistName = MutableStateFlow("AURA-7")
-    val artistGenre =
-        MutableStateFlow(MusicGenre.EDM_ELECTRONIC)
-
-    val artistGender =
-        MutableStateFlow(VocalGender.FEMALE)
-
-    val artistVisualStyle =
-        MutableStateFlow("Cyberpunk Hologram")
+    val artistGenre = MutableStateFlow(MusicGenre.EDM_ELECTRONIC)
+    val artistGender = MutableStateFlow(VocalGender.FEMALE)
+    val artistVisualStyle = MutableStateFlow("Cyberpunk Hologram")
 
     private val _isGeneratingArtist = MutableStateFlow(false)
     val isGeneratingArtist = _isGeneratingArtist.asStateFlow()
 
-    private val _generatedArtist =
-        MutableStateFlow<ArtistPersonaResult?>(null)
-
+    private val _generatedArtist = MutableStateFlow<ArtistPersonaResult?>(null)
     val generatedArtist = _generatedArtist.asStateFlow()
 
     // VIDEO
-    val videoSelectedSong =
-        MutableStateFlow<SongItem?>(null)
-
-    val videoVisualStyle =
-        MutableStateFlow("Cyberpunk Neon & Hologram")
+    val videoSelectedSong = MutableStateFlow<SongItem?>(null)
+    val videoVisualStyle = MutableStateFlow("Cyberpunk Neon & Hologram")
 
     private val _isGeneratingVideo = MutableStateFlow(false)
     val isGeneratingVideo = _isGeneratingVideo.asStateFlow()
@@ -186,75 +160,67 @@ class MusicStudioViewModel(application: Application) :
     val generatedStoryboard = _generatedStoryboard.asStateFlow()
 
     // ACTIVE SONG
-    private val _activePlayingSong =
-        MutableStateFlow<SongItem?>(null)
-
-    val activePlayingSong =
-        _activePlayingSong.asStateFlow()
+    private val _activePlayingSong = MutableStateFlow<SongItem?>(null)
+    val activePlayingSong = _activePlayingSong.asStateFlow()
 
     init {
         viewModelScope.launch {
-            val starterArtist = VirtualArtist(
-                name = "AURA-7",
-                stageTitle = "Cyber Pop Idol",
-                genre = "EDM & Synthwave",
-                gender = "FEMALE",
-                bio = "AURA-7, yapay zeka ile insan duygularının kesişim noktasında parlayan yeni nesil bir sanal pop yıldızıdır.",
-                visualStyle = "Cyberpunk Hologram",
-                signatureLook = "Neon saçlar, holografik kulaklık ve parıltılı sahne kostümleri.",
-                vocalToneId = "female_elif",
-                avatarDrawableRes = "img_virtual_female_artist"
+            db.virtualArtistDao().insertArtist(
+                VirtualArtist(
+                    name = "AURA-7",
+                    stageTitle = "Cyber Pop Idol",
+                    genre = "EDM & Synthwave",
+                    gender = "FEMALE",
+                    bio = "AURA-7, yapay zeka ile insan duygularının kesişim noktasında parlayan yeni nesil bir sanal pop yıldızıdır.",
+                    visualStyle = "Cyberpunk Hologram",
+                    signatureLook = "Neon saçlar, holografik kulaklık ve parıltılı sahne kostümleri.",
+                    vocalToneId = "female_elif",
+                    avatarDrawableRes = "img_virtual_female_artist"
+                )
             )
 
-            db.virtualArtistDao().insertArtist(starterArtist)
-
-            val starterArtistMale = VirtualArtist(
-                name = "KRONOS",
-                stageTitle = "Anatolian Rock & Grunt",
-                genre = "Rock & Anadolu Rock",
-                gender = "MALE",
-                bio = "KRONOS, geleneksel Anadolu tınılarını fütüristik synthesizer ve güçlü rock vokalleriyle harmanlayan sanal bir müzisyendir.",
-                visualStyle = "Futuristic Rocker",
-                signatureLook = "Deri ceket, neon gitar ve cyber gözlükler.",
-                vocalToneId = "male_kaan",
-                avatarDrawableRes = "img_virtual_male_artist"
+            db.virtualArtistDao().insertArtist(
+                VirtualArtist(
+                    name = "KRONOS",
+                    stageTitle = "Anatolian Rock & Grunt",
+                    genre = "Rock & Anadolu Rock",
+                    gender = "MALE",
+                    bio = "KRONOS, geleneksel Anadolu tınılarını fütüristik synthesizer ve güçlü rock vokalleriyle harmanlayan sanal bir müzisyendir.",
+                    visualStyle = "Futuristic Rocker",
+                    signatureLook = "Deri ceket, neon gitar ve cyber gözlükler.",
+                    vocalToneId = "male_kaan",
+                    avatarDrawableRes = "img_virtual_male_artist"
+                )
             )
-
-            db.virtualArtistDao().insertArtist(starterArtistMale)
         }
     }
 
-    // STEP 1: GENERATE LYRICS WITH GEMINI ONLY
-    // Bu fonksiyon EROQ servisini çağırmaz ve müzik kredisi harcamaz.
+    // GEMINI LYRICS ONLY
     fun generateSong() {
         if (_isGeneratingSong.value) return
 
         viewModelScope.launch {
             _isGeneratingSong.value = true
-
             _generationMessage.value =
-                "Gemini şarkı sözlerini, akorları ve aranjeyi hazırlıyor..."
+                "Gemini şarkı sözlerini ve aranjeyi hazırlıyor..."
 
             _generatedSongAudioUrl.value = null
             _generatedSong.value = null
 
             try {
-                val lyricsResult = geminiService.generateSong(
+                val result = geminiService.generateSong(
                     theme = composeTheme.value,
                     genre = composeGenre.value.displayName,
                     mood = composeMood.value,
-                    vocalGender =
-                        composeVocalTone.value.gender.displayName,
+                    vocalGender = composeVocalTone.value.gender.displayName,
                     vocalTone = composeVocalTone.value.name,
                     musicalKey = composeKey.value,
                     tempoBpm = composeBpm.value
                 )
 
-                _generatedSong.value = lyricsResult
-
+                _generatedSong.value = result
                 _generationMessage.value =
-                    "Şarkı sözleri hazır! İncele. Gerçek müzik üretmek için ikinci düğmeye bas."
-
+                    "Şarkı sözleri hazır. Gerçek müzik için ikinci üretim adımını kullan."
             } catch (e: Exception) {
                 _generationMessage.value =
                     "Şarkı sözü hazırlama hatası: ${e.message ?: "Bilinmeyen hata"}"
@@ -264,39 +230,32 @@ class MusicStudioViewModel(application: Application) :
         }
     }
 
-    // STEP 2: GENERATE REAL MUSIC WITH EROQ
-    // Bu fonksiyon yalnızca kullanıcı ayrıca çağırdığında çalışır.
+    // REAL SONG WITH EROQ
     fun generateRealSong() {
         if (_isGeneratingSong.value) return
 
         val lyricsResult = _generatedSong.value
-
         if (lyricsResult == null) {
-            _generationMessage.value =
-                "Önce Gemini ile şarkı sözlerini oluşturmalısın."
+            _generationMessage.value = "Önce şarkı sözlerini oluşturmalısın."
             return
         }
 
         if (!_generatedSongAudioUrl.value.isNullOrBlank()) {
-            _generationMessage.value =
-                "Bu şarkının gerçek MP3 dosyası zaten hazır."
+            _generationMessage.value = "Bu şarkının MP3 dosyası zaten hazır."
             return
         }
 
         viewModelScope.launch {
             _isGeneratingSong.value = true
-
-            _generationMessage.value =
-                "Eroq Music One gerçek müziği ve vokali üretiyor..."
+            _generationMessage.value = "Eroq Music One gerçek müziği üretiyor..."
 
             try {
-                val selectedVocal = composeVocalTone.value
-
+                val vocal = composeVocalTone.value
                 val style = buildString {
                     append("Turkish language, ")
-                    append(selectedVocal.gender.displayName)
+                    append(vocal.gender.displayName)
                     append(", ")
-                    append(selectedVocal.name)
+                    append(vocal.name)
                     append(", ")
                     append(composeGenre.value.displayName)
                     append(", ")
@@ -310,19 +269,10 @@ class MusicStudioViewModel(application: Application) :
                     append(", natural Turkish pronunciation")
                 }
 
-                val prompt = buildString {
-                    append("Türkçe ")
-                    append(composeGenre.value.displayName)
-                    append(" şarkısı. ")
-                    append(composeTheme.value)
-                    append(". Ruh hali: ")
-                    append(composeMood.value)
-                    append(". ")
-                    append(selectedVocal.gender.displayName)
-                    append(" vokal, doğal Türkçe telaffuz, ")
-                    append(composeBpm.value)
-                    append(" BPM.")
-                }
+                val prompt = "Türkçe ${composeGenre.value.displayName} şarkısı. " +
+                    "${composeTheme.value}. Ruh hali: ${composeMood.value}. " +
+                    "${vocal.gender.displayName} vokal, ${vocal.name}, " +
+                    "doğal Türkçe telaffuz, ${composeBpm.value} BPM."
 
                 val result = eroqService.generateMusicAndWait(
                     prompt = prompt,
@@ -333,31 +283,16 @@ class MusicStudioViewModel(application: Application) :
                     instrumental = false
                 )
 
-                val audioUrl =
-                    result.optString("audioUrl", "")
-
-                if (
-                    audioUrl.isBlank() ||
-                    !audioUrl.startsWith("http")
-                ) {
-                    throw IllegalStateException(
-                        "Eroq MP3 bağlantısı döndürmedi."
-                    )
+                val audioUrl = result.optString("audioUrl", "")
+                require(audioUrl.startsWith("http")) {
+                    "Eroq geçerli MP3 bağlantısı döndürmedi."
                 }
 
                 _generatedSongAudioUrl.value = audioUrl
-
-                val finalTitle = result.optString(
-                    "title",
-                    lyricsResult.title
+                _generatedSong.value = lyricsResult.copy(
+                    title = result.optString("title", lyricsResult.title)
                 )
-
-                _generatedSong.value =
-                    lyricsResult.copy(title = finalTitle)
-
-                _generationMessage.value =
-                    "Gerçek şarkı hazır. Dinleyebilir, kaydedebilir veya MP3 olarak indirebilirsin."
-
+                _generationMessage.value = "Gerçek şarkı hazır. Dinleyebilir ve kaydedebilirsin."
             } catch (e: Exception) {
                 _generationMessage.value =
                     "Gerçek müzik üretim hatası: ${e.message ?: "Bilinmeyen hata"}"
@@ -367,32 +302,17 @@ class MusicStudioViewModel(application: Application) :
         }
     }
 
-    // GENERATED SONG PLAYBACK
     fun playGeneratedSong() {
         val url = _generatedSongAudioUrl.value
-
         if (url.isNullOrBlank()) {
-            _generationMessage.value =
-                "Önce gerçek şarkı üretmelisin."
+            _generationMessage.value = "Önce gerçek şarkı üretmelisin."
             return
         }
 
-        if (_generatedSong.value == null) {
-            _generationMessage.value =
-                "Şarkı bilgileri bulunamadı."
-            return
-        }
-
-        audioEngine.playUrl(
-            url = url,
-            bpm = composeBpm.value
-        )
-
-        _generationMessage.value =
-            "Gerçek MP3 oynatılıyor."
+        audioEngine.playUrl(url = url, bpm = composeBpm.value)
+        _generationMessage.value = "Gerçek MP3 oynatılıyor."
     }
 
-    // SAVE GENERATED SONG TO DATABASE
     fun saveGeneratedSong(
         artistId: String? = null,
         artistName: String? = null
@@ -415,54 +335,41 @@ class MusicStudioViewModel(application: Application) :
                 isCover = false,
                 audioUrl = _generatedSongAudioUrl.value,
                 audioFilePath = null,
-                durationSeconds =
-                    if (_generatedSongAudioUrl.value != null) 60 else null
+                durationSeconds = if (_generatedSongAudioUrl.value != null) 60 else null
             )
 
             db.songDao().insertSong(item)
-
             _activePlayingSong.value = item
-
             _generationMessage.value =
                 if (_generatedSongAudioUrl.value != null) {
                     "Gerçek şarkı kütüphaneye kaydedildi."
                 } else {
-                    "Şarkı sözleri kütüphaneye kaydedildi. Gerçek MP3 henüz üretilmedi."
+                    "Şarkı sözleri kaydedildi; MP3 henüz üretilmedi."
                 }
         }
     }
 
-    // DOWNLOAD GENERATED SONG
     fun downloadGeneratedSong() {
         val song = _generatedSong.value ?: run {
-            _downloadMessage.value =
-                "İndirilecek şarkı bulunamadı."
+            _downloadMessage.value = "İndirilecek şarkı bulunamadı."
             return
         }
 
         val url = _generatedSongAudioUrl.value
-
         if (url.isNullOrBlank()) {
-            _downloadMessage.value =
-                "Önce gerçek müzik üretmelisin. Henüz MP3 bağlantısı yok."
+            _downloadMessage.value = "Önce gerçek müzik üretmelisin."
             return
         }
 
         if (_downloadingSongId.value != null) return
 
         viewModelScope.launch {
-            val temporaryId = "generated_song"
-
-            _downloadingSongId.value = temporaryId
+            _downloadingSongId.value = "generated_song"
             _downloadProgress.value = 0
             _downloadMessage.value = "MP3 indiriliyor..."
 
             try {
-                val file = downloadMp3ToPhone(
-                    url = url,
-                    title = song.title
-                )
-
+                val file = downloadMp3ToPhone(url, song.title)
                 val item = SongItem(
                     title = song.title,
                     lyrics = song.lyrics,
@@ -480,12 +387,9 @@ class MusicStudioViewModel(application: Application) :
                 )
 
                 db.songDao().insertSong(item)
-
                 _activePlayingSong.value = item
                 _downloadProgress.value = 100
-                _downloadMessage.value =
-                    "Şarkı indirildi ve kütüphaneye kaydedildi."
-
+                _downloadMessage.value = "Şarkı indirildi ve kütüphaneye kaydedildi."
             } catch (e: Exception) {
                 _downloadMessage.value =
                     "İndirme hatası: ${e.message ?: "Bilinmeyen hata"}"
@@ -495,23 +399,17 @@ class MusicStudioViewModel(application: Application) :
         }
     }
 
-    // DOWNLOAD A SONG ALREADY IN LIBRARY
     fun downloadSong(song: SongItem) {
-        if (!song.audioFilePath.isNullOrBlank()) {
-            val existingFile = File(song.audioFilePath)
-
-            if (existingFile.exists()) {
-                _downloadMessage.value =
-                    "Bu şarkı zaten telefona indirilmiş."
-                return
-            }
+        if (!song.audioFilePath.isNullOrBlank() &&
+            File(song.audioFilePath).exists()
+        ) {
+            _downloadMessage.value = "Bu şarkı zaten telefona indirilmiş."
+            return
         }
 
         val url = song.audioUrl
-
         if (url.isNullOrBlank()) {
-            _downloadMessage.value =
-                "Bu şarkının indirilebilir MP3 bağlantısı yok."
+            _downloadMessage.value = "Bu şarkının indirilebilir MP3 bağlantısı yok."
             return
         }
 
@@ -520,19 +418,11 @@ class MusicStudioViewModel(application: Application) :
         viewModelScope.launch {
             _downloadingSongId.value = song.id
             _downloadProgress.value = 0
-            _downloadMessage.value =
-                "${song.title} indiriliyor..."
+            _downloadMessage.value = "${song.title} indiriliyor..."
 
             try {
-                val file = downloadMp3ToPhone(
-                    url = url,
-                    title = song.title
-                )
-
-                val updatedSong = song.copy(
-                    audioFilePath = file.absolutePath
-                )
-
+                val file = downloadMp3ToPhone(url, song.title)
+                val updatedSong = song.copy(audioFilePath = file.absolutePath)
                 db.songDao().updateSong(updatedSong)
 
                 if (_activePlayingSong.value?.id == song.id) {
@@ -540,9 +430,7 @@ class MusicStudioViewModel(application: Application) :
                 }
 
                 _downloadProgress.value = 100
-                _downloadMessage.value =
-                    "${song.title} telefona indirildi."
-
+                _downloadMessage.value = "${song.title} telefona indirildi."
             } catch (e: Exception) {
                 _downloadMessage.value =
                     "İndirme hatası: ${e.message ?: "Bilinmeyen hata"}"
@@ -552,21 +440,14 @@ class MusicStudioViewModel(application: Application) :
         }
     }
 
-    // MP3 DOWNLOAD HELPER
     private suspend fun downloadMp3ToPhone(
         url: String,
         title: String
     ): File = withContext(Dispatchers.IO) {
-
-        val musicFolder = File(
-            app.filesDir,
-            "Music/MuseCraft"
-        )
+        val musicFolder = File(app.filesDir, "Music/MuseCraft")
 
         if (!musicFolder.exists() && !musicFolder.mkdirs()) {
-            throw IllegalStateException(
-                "MuseCraft müzik klasörü oluşturulamadı."
-            )
+            throw IllegalStateException("MuseCraft müzik klasörü oluşturulamadı.")
         }
 
         val safeTitle = title
@@ -576,11 +457,7 @@ class MusicStudioViewModel(application: Application) :
             .take(70)
             .ifBlank { "MuseCraft_Sarki" }
 
-        var outputFile = File(
-            musicFolder,
-            "$safeTitle.mp3"
-        )
-
+        var outputFile = File(musicFolder, "$safeTitle.mp3")
         if (outputFile.exists()) {
             outputFile = File(
                 musicFolder,
@@ -588,67 +465,44 @@ class MusicStudioViewModel(application: Application) :
             )
         }
 
-        val connection =
-            (URL(url).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 30000
-                readTimeout = 60000
-                instanceFollowRedirects = true
-                setRequestProperty(
-                    "User-Agent",
-                    "MuseCraft Android"
-                )
-            }
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 30000
+            readTimeout = 60000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "MuseCraft Android")
+        }
 
         try {
             connection.connect()
-
             val responseCode = connection.responseCode
 
             if (responseCode !in 200..299) {
-                throw IllegalStateException(
-                    "Sunucu indirme hatası verdi: HTTP $responseCode"
-                )
+                throw IllegalStateException("Sunucu indirme hatası: HTTP $responseCode")
             }
 
-            val contentType =
-                connection.contentType.orEmpty()
-
-            if (
-                contentType.contains("text/html", true) ||
+            val contentType = connection.contentType.orEmpty()
+            if (contentType.contains("text/html", true) ||
                 contentType.contains("application/json", true)
             ) {
-                throw IllegalStateException(
-                    "Sunucu MP3 yerine farklı bir içerik gönderdi."
-                )
+                throw IllegalStateException("Sunucu MP3 yerine farklı içerik gönderdi.")
             }
 
             connection.inputStream.use { input ->
                 FileOutputStream(outputFile).use { output ->
                     val buffer = ByteArray(8192)
-                    var bytesRead: Int
-
-                    while (
-                        input.read(buffer).also {
-                            bytesRead = it
-                        } != -1
-                    ) {
-                        output.write(buffer, 0, bytesRead)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count == -1) break
+                        output.write(buffer, 0, count)
                     }
-
                     output.flush()
                 }
             }
 
-            if (
-                !outputFile.exists() ||
-                outputFile.length() < 1024
-            ) {
+            if (!outputFile.exists() || outputFile.length() < 1024) {
                 outputFile.delete()
-
-                throw IllegalStateException(
-                    "İndirilen MP3 dosyası boş veya geçersiz."
-                )
+                throw IllegalStateException("İndirilen MP3 dosyası boş veya geçersiz.")
             }
 
             outputFile
@@ -660,58 +514,152 @@ class MusicStudioViewModel(application: Application) :
         }
     }
 
-    // COVER GENERATION
+    // COVER: GEMINI LYRICS + EROQ REAL AUDIO
     fun generateCover() {
         if (_isGeneratingCover.value) return
 
+        if (coverTargetVocal.value.id == "user_own_voice") {
+            _coverMessage.value =
+                "Kendi sesin seçili. Önce ses kaydı ve ses modeli desteği gerekir."
+            return
+        }
+
         viewModelScope.launch {
             _isGeneratingCover.value = true
+            _coverMessage.value = "Gemini cover sözlerini ve aranjeyi hazırlıyor..."
+            _generatedCover.value = null
+            _generatedCoverAudioUrl.value = null
 
             try {
-                val result = geminiService.generateCover(
-                    originalSongTitle = coverOriginalTitle.value,
-                    targetGenre = coverTargetGenre.value.displayName,
-                    targetVocalGender =
-                        coverTargetVocal.value.gender.displayName,
-                    targetVocalTone = coverTargetVocal.value.name,
+                val selectedVocal = coverTargetVocal.value
+                val selectedGenre = coverTargetGenre.value
+                val originalTitle = coverOriginalTitle.value.trim()
+
+                require(originalTitle.isNotBlank()) {
+                    "Lütfen cover yapılacak şarkının adını veya temasını yaz."
+                }
+
+                val cover = geminiService.generateCover(
+                    originalSongTitle = originalTitle,
+                    targetGenre = selectedGenre.displayName,
+                    targetVocalGender = selectedVocal.gender.displayName,
+                    targetVocalTone = selectedVocal.name,
                     coverStyleNotes = coverNotes.value
                 )
 
-                _generatedCover.value = result
+                _generatedCover.value = cover
+                _coverMessage.value =
+                    "Sözler hazır. Eroq Music One gerçek kadın vokalli müziği hazırlıyor..."
+
+                val style = buildString {
+                    append("Turkish language, ")
+                    append(selectedVocal.gender.displayName)
+                    append(" lead vocal, ")
+                    append(selectedVocal.name)
+                    append(" vocal tone, ")
+                    append(selectedGenre.displayName)
+                    append(", ")
+                    append(coverNotes.value)
+                    append(", ")
+                    append(cover.instrumentation)
+                    append(", ")
+                    append(cover.vocalDirection)
+                    append(", natural Turkish pronunciation, professional studio production")
+                }
+
+                val prompt = buildString {
+                    append("Create a new Turkish song inspired by the theme: ")
+                    append(originalTitle)
+                    append(". Genre: ")
+                    append(selectedGenre.displayName)
+                    append(". Vocal: ")
+                    append(selectedVocal.gender.displayName)
+                    append(", ")
+                    append(selectedVocal.name)
+                    append(". Sing all lyrics in Turkish with natural Turkish pronunciation. ")
+                    append(coverNotes.value)
+                }
+
+                val result = eroqService.generateMusicAndWait(
+                    prompt = prompt,
+                    style = style,
+                    lyrics = cover.lyrics,
+                    title = cover.title,
+                    seconds = 60,
+                    instrumental = false
+                )
+
+                val audioUrl = result.optString("audioUrl", "")
+                require(audioUrl.startsWith("http")) {
+                    "Eroq geçerli MP3 bağlantısı döndürmedi."
+                }
+
+                _generatedCoverAudioUrl.value = audioUrl
+                _coverMessage.value =
+                    "Gerçek cover müziği hazır! Dinleyebilir ve kütüphaneye kaydedebilirsin."
 
             } catch (e: Exception) {
-                _generationMessage.value =
-                    "Cover hazırlama hatası: ${e.message}"
+                _coverMessage.value =
+                    "Cover üretim hatası: ${e.message ?: "Bilinmeyen hata"}"
             } finally {
                 _isGeneratingCover.value = false
             }
         }
     }
 
+    fun playGeneratedCover() {
+        val url = _generatedCoverAudioUrl.value
+        if (url.isNullOrBlank()) {
+            _coverMessage.value = "Önce gerçek cover MP3 dosyasını oluşturmalısın."
+            return
+        }
+
+        audioEngine.playUrl(url = url, bpm = 126)
+        _coverMessage.value = "Gerçek cover MP3 oynatılıyor."
+    }
+
     fun saveGeneratedCover() {
-        val cover = _generatedCover.value ?: return
+        val cover = _generatedCover.value ?: run {
+            _coverMessage.value = "Kaydedilecek cover bulunamadı."
+            return
+        }
+
+        val audioUrl = _generatedCoverAudioUrl.value
+        if (audioUrl.isNullOrBlank()) {
+            _coverMessage.value = "Cover sözleri hazır ancak gerçek MP3 henüz üretilmedi."
+            return
+        }
 
         viewModelScope.launch {
-            val item = SongItem(
-                title = cover.title,
-                lyrics = cover.lyrics,
-                genre = coverTargetGenre.value.displayName,
-                mood = "Cover Yeniden Yorumu",
-                tempoBpm = 126,
-                musicalKey = "E Minör",
-                chordProgression = cover.chordProgression,
-                vocalToneName = coverTargetVocal.value.name,
-                vocalGender = coverTargetVocal.value.gender.name,
-                coverSourceSong = coverOriginalTitle.value,
-                isCover = true
-            )
+            try {
+                val item = SongItem(
+                    title = cover.title,
+                    lyrics = cover.lyrics,
+                    genre = coverTargetGenre.value.displayName,
+                    mood = "Cover Yeniden Yorumu",
+                    tempoBpm = 126,
+                    musicalKey = "E Minör",
+                    chordProgression = cover.chordProgression,
+                    vocalToneName = coverTargetVocal.value.name,
+                    vocalGender = coverTargetVocal.value.gender.name,
+                    coverSourceSong = coverOriginalTitle.value,
+                    isCover = true,
+                    audioUrl = audioUrl,
+                    audioFilePath = null,
+                    durationSeconds = 60
+                )
 
-            db.songDao().insertSong(item)
-            _activePlayingSong.value = item
+                db.songDao().insertSong(item)
+                _activePlayingSong.value = item
+                _coverMessage.value = "Gerçek cover kütüphaneye kaydedildi."
+            } catch (e: Exception) {
+                _coverMessage.value =
+                    "Cover kaydetme hatası: ${e.message ?: "Bilinmeyen hata"}"
+            }
         }
     }
 
-    // ARTIST GENERATION
+    // ARTIST
     fun generateArtist() {
         if (_isGeneratingArtist.value) return
 
@@ -719,15 +667,12 @@ class MusicStudioViewModel(application: Application) :
             _isGeneratingArtist.value = true
 
             try {
-                val result = geminiService.generateArtistPersona(
+                _generatedArtist.value = geminiService.generateArtistPersona(
                     name = artistName.value,
                     genre = artistGenre.value.displayName,
                     gender = artistGender.value.displayName,
                     visualStyle = artistVisualStyle.value
                 )
-
-                _generatedArtist.value = result
-
             } catch (e: Exception) {
                 _generationMessage.value =
                     "Sanatçı oluşturma hatası: ${e.message}"
@@ -741,13 +686,7 @@ class MusicStudioViewModel(application: Application) :
         val artist = _generatedArtist.value ?: return
 
         viewModelScope.launch {
-            val avatarRes =
-                if (artistGender.value == VocalGender.FEMALE) {
-                    "img_virtual_female_artist"
-                } else {
-                    "img_virtual_male_artist"
-                }
-
+            val female = artistGender.value == VocalGender.FEMALE
             val item = VirtualArtist(
                 name = artistName.value,
                 stageTitle = artist.stageTitle,
@@ -756,13 +695,12 @@ class MusicStudioViewModel(application: Application) :
                 bio = artist.bio,
                 visualStyle = artistVisualStyle.value,
                 signatureLook = artist.signatureLook,
-                vocalToneId =
-                    if (artistGender.value == VocalGender.FEMALE) {
-                        "female_elif"
-                    } else {
-                        "male_kaan"
-                    },
-                avatarDrawableRes = avatarRes
+                vocalToneId = if (female) "female_elif" else "male_kaan",
+                avatarDrawableRes = if (female) {
+                    "img_virtual_female_artist"
+                } else {
+                    "img_virtual_male_artist"
+                }
             )
 
             db.virtualArtistDao().insertArtist(item)
@@ -778,13 +716,12 @@ class MusicStudioViewModel(application: Application) :
             videoSelectedSong.value = song
 
             try {
-                val result =
-                    geminiService.generateVideoStoryboard(
-                        songTitle = song.title,
-                        genre = song.genre,
-                        lyrics = song.lyrics,
-                        visualStyle = videoVisualStyle.value
-                    )
+                val result = geminiService.generateVideoStoryboard(
+                    songTitle = song.title,
+                    genre = song.genre,
+                    lyrics = song.lyrics,
+                    visualStyle = videoVisualStyle.value
+                )
 
                 _generatedStoryboard.value = result
 
@@ -795,27 +732,22 @@ class MusicStudioViewModel(application: Application) :
                             put("timeCode", scene.timeCode)
                             put("sectionName", scene.sectionName)
                             put("cameraAngle", scene.cameraAngle)
-                            put(
-                                "visualDescription",
-                                scene.visualDescription
-                            )
+                            put("visualDescription", scene.visualDescription)
                             put("lyricSnippet", scene.lyricSnippet)
                             put("lightingVibe", scene.lightingVibe)
                         })
                     }
                 }.toString()
 
-                val storyboard = VideoStoryboard(
-                    songId = song.id,
-                    songTitle = song.title,
-                    visualStyle = videoVisualStyle.value,
-                    conceptTitle = result.conceptTitle,
-                    scenesJson = scenesJson
+                db.videoStoryboardDao().insertStoryboard(
+                    VideoStoryboard(
+                        songId = song.id,
+                        songTitle = song.title,
+                        visualStyle = videoVisualStyle.value,
+                        conceptTitle = result.conceptTitle,
+                        scenesJson = scenesJson
+                    )
                 )
-
-                db.videoStoryboardDao()
-                    .insertStoryboard(storyboard)
-
             } catch (e: Exception) {
                 _generationMessage.value =
                     "Video senaryosu hatası: ${e.message}"
@@ -825,7 +757,7 @@ class MusicStudioViewModel(application: Application) :
         }
     }
 
-    // REAL MP3 PLAYBACK FROM LIBRARY
+    // PLAYBACK
     fun playSongAudio(song: SongItem) {
         _activePlayingSong.value = song
 
@@ -833,37 +765,20 @@ class MusicStudioViewModel(application: Application) :
         val remoteUrl = song.audioUrl
 
         when {
-            !localPath.isNullOrBlank() &&
-                File(localPath).exists() -> {
-                audioEngine.playFile(
-                    filePath = localPath,
-                    bpm = song.tempoBpm
-                )
+            !localPath.isNullOrBlank() && File(localPath).exists() -> {
+                audioEngine.playFile(localPath, song.tempoBpm)
             }
-
             !remoteUrl.isNullOrBlank() -> {
-                audioEngine.playUrl(
-                    url = remoteUrl,
-                    bpm = song.tempoBpm
-                )
+                audioEngine.playUrl(remoteUrl, song.tempoBpm)
             }
-
-            else -> {
-                playLegacySyntheticSong(song)
-            }
+            else -> playLegacySyntheticSong(song)
         }
     }
 
     private fun playLegacySyntheticSong(song: SongItem) {
         val isCustomUserVoice =
-            song.vocalToneName.contains(
-                "Kendi Sesim",
-                true
-            ) ||
-            song.vocalToneName.contains(
-                "user_own_voice",
-                true
-            )
+            song.vocalToneName.contains("Kendi Sesim", true) ||
+            song.vocalToneName.contains("user_own_voice", true)
 
         val isFemale =
             song.vocalGender == "FEMALE" ||
@@ -882,7 +797,6 @@ class MusicStudioViewModel(application: Application) :
         )
     }
 
-    // PLAY / PAUSE
     fun togglePlayback() {
         if (audioEngine.isPreparing.value) return
 
@@ -892,20 +806,15 @@ class MusicStudioViewModel(application: Application) :
         }
 
         val song = _activePlayingSong.value
-
         if (song != null) {
             playSongAudio(song)
         } else {
-            val isCustomUserVoice =
-                composeVocalTone.value.id == "user_own_voice"
-
+            val customVoice = composeVocalTone.value.id == "user_own_voice"
             audioEngine.playTrack(
                 genre = composeGenre.value.displayName,
                 musicalKey = composeKey.value,
-                isFemaleVocal =
-                    composeVocalTone.value.gender ==
-                        VocalGender.FEMALE,
-                isCustomUserVoice = isCustomUserVoice,
+                isFemaleVocal = composeVocalTone.value.gender == VocalGender.FEMALE,
+                isCustomUserVoice = customVoice,
                 bpm = composeBpm.value
             )
         }
@@ -923,11 +832,9 @@ class MusicStudioViewModel(application: Application) :
         audioEngine.stopTrack()
     }
 
-    // DELETE SONG
     fun deleteSong(song: SongItem) {
         viewModelScope.launch {
             db.songDao().deleteSong(song)
-
             if (_activePlayingSong.value?.id == song.id) {
                 audioEngine.stopTrack()
                 _activePlayingSong.value = null
@@ -935,7 +842,6 @@ class MusicStudioViewModel(application: Application) :
         }
     }
 
-    // DELETE ARTIST
     fun deleteArtist(artist: VirtualArtist) {
         viewModelScope.launch {
             db.virtualArtistDao().deleteArtist(artist)
@@ -944,7 +850,6 @@ class MusicStudioViewModel(application: Application) :
 
     override fun onCleared() {
         super.onCleared()
-
         audioEngine.stopTrack()
         voiceRecorder.stopRecording()
         voiceRecorder.stopPlayingSample()
