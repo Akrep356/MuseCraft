@@ -11,6 +11,20 @@ const EROQ_API_URL = "https://eroq.ai/v1";
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
+// JSON yanıtını güvenli şekilde oku
+async function readJsonResponse(response) {
+    const text = await response.text();
+
+    try {
+        return text ? JSON.parse(text) : {};
+    } catch {
+        return {
+            error: "Eroq geçerli JSON yanıtı döndürmedi.",
+            raw: text.slice(0, 2000)
+        };
+    }
+}
+
 // SUNUCU KONTROLÜ
 app.get("/", (req, res) => {
     res.json({
@@ -51,7 +65,7 @@ app.post("/api/music/generate", async (req, res) => {
             title,
             seconds = 60,
             instrumental = false
-        } = req.body;
+        } = req.body || {};
 
         const duration = Number(seconds);
 
@@ -67,14 +81,25 @@ app.post("/api/music/generate", async (req, res) => {
             });
         }
 
-        if (
-            !prompt &&
-            !style &&
-            !lyrics
-        ) {
+        const cleanPrompt = String(prompt || "").trim();
+        const cleanStyle = String(style || "").trim();
+        const cleanLyrics = String(lyrics || "").trim();
+        const cleanTitle = String(title || "").trim();
+
+        if (!cleanPrompt && !cleanStyle && !cleanLyrics) {
             return res.status(400).json({
                 ok: false,
-                error: "Müzik açıklaması veya müzik stili gerekli."
+                error: "Müzik açıklaması, stil veya şarkı sözleri gerekli."
+            });
+        }
+
+        if (cleanPrompt.length > 600 ||
+            cleanStyle.length > 600 ||
+            cleanLyrics.length > 3000 ||
+            cleanTitle.length > 80) {
+            return res.status(400).json({
+                ok: false,
+                error: "Gönderilen metinlerden biri izin verilen uzunluğu aşıyor."
             });
         }
 
@@ -85,48 +110,75 @@ app.post("/api/music/generate", async (req, res) => {
             instrumental: Boolean(instrumental)
         };
 
-        if (prompt) musicRequest.prompt = String(prompt).slice(0, 600);
-        if (style) musicRequest.style = String(style).slice(0, 600);
-        if (lyrics) musicRequest.lyrics = String(lyrics).slice(0, 3000);
-        if (title) musicRequest.title = String(title).slice(0, 80);
+        if (cleanPrompt) musicRequest.prompt = cleanPrompt;
+        if (cleanStyle) musicRequest.style = cleanStyle;
+        if (cleanLyrics) musicRequest.lyrics = cleanLyrics;
+        if (cleanTitle) musicRequest.title = cleanTitle;
+
+        console.log("EROQ MUSIC REQUEST:", {
+            seconds: duration,
+            takes: 1,
+            instrumental: Boolean(instrumental)
+        });
 
         const response = await fetch(
             `${EROQ_API_URL}/music/generations`,
             {
                 method: "POST",
                 headers: {
-                    "Authorization": `Bearer ${EROQ_API_KEY}`,
+                    Authorization: `Bearer ${EROQ_API_KEY}`,
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify(musicRequest)
             }
         );
 
-        const result = await response.json();
+        const result = await readJsonResponse(response);
 
         if (!response.ok) {
+            console.error("EROQ GENERATION ERROR:", result);
+
             return res.status(response.status).json({
                 ok: false,
-                error: result.error || result.message || "Eroq müzik üretim hatası.",
+                error:
+                    result.error?.message ||
+                    result.error ||
+                    result.message ||
+                    "Eroq müzik üretim hatası.",
+                details: result
+            });
+        }
+
+        const jobs = Array.isArray(result.jobs)
+            ? result.jobs
+            : [];
+
+        if (jobs.length === 0 || !jobs[0].id) {
+            console.error("EROQ JOB ID MISSING:", result);
+
+            return res.status(502).json({
+                ok: false,
+                error: "Eroq üretim yanıtında iş kimliği bulunamadı.",
                 details: result
             });
         }
 
         return res.status(202).json({
             ok: true,
-            status: result.status,
-            title: result.title,
-            lyrics: result.lyrics,
-            style: result.style,
-            seconds: result.seconds,
-            jobs: result.jobs,
-            usage: result.usage
+            status: result.status || "processing",
+            id: jobs[0].id,
+            jobs: jobs,
+            title: result.title || cleanTitle,
+            lyrics: result.lyrics || cleanLyrics,
+            style: result.style || cleanStyle,
+            seconds: result.seconds || duration,
+            usage: result.usage || null
         });
 
     } catch (error) {
         console.error("MUSIC GENERATION ERROR:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             ok: false,
             error: "Müzik sunucusunda beklenmeyen hata."
         });
@@ -157,35 +209,44 @@ app.get("/api/music/status/:id", async (req, res) => {
             {
                 method: "GET",
                 headers: {
-                    "Authorization": `Bearer ${EROQ_API_KEY}`
+                    Authorization: `Bearer ${EROQ_API_KEY}`
                 }
             }
         );
 
-        const result = await response.json();
+        const result = await readJsonResponse(response);
 
         if (!response.ok) {
+            console.error("EROQ STATUS ERROR:", result);
+
             return res.status(response.status).json({
                 ok: false,
-                error: "Müzik durumu alınamadı.",
+                error:
+                    result.error?.message ||
+                    result.error ||
+                    "Müzik durumu alınamadı.",
                 details: result
             });
         }
 
+        const status = String(result.status || "unknown").toLowerCase();
+
         return res.json({
             ok: true,
-            id: result.id,
-            status: result.status,
-            title: result.title,
-            seconds: result.seconds,
-            data: result.data,
-            error: result.error
+            id: result.id || id,
+            status: status,
+            title: result.title || null,
+            style: result.style || null,
+            lyrics: result.lyrics || null,
+            seconds: result.seconds || null,
+            data: result.data || null,
+            error: result.error || null
         });
 
     } catch (error) {
         console.error("MUSIC STATUS ERROR:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             ok: false,
             error: "Müzik durumu kontrol edilemedi."
         });
@@ -194,6 +255,8 @@ app.get("/api/music/status/:id", async (req, res) => {
 
 // SUNUCUYU BAŞLAT
 app.listen(PORT, "0.0.0.0", () => {
-    console.log("MuseCraft Music Server listening on port " + PORT);
+    console.log(
+        "MuseCraft Music Server listening on port " + PORT
+    );
     console.log("Eroq Music One integration ready.");
 });
