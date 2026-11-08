@@ -1,4 +1,3 @@
-
 package com.example.viewmodel
 
 import android.app.Application
@@ -514,19 +513,21 @@ class MusicStudioViewModel(application: Application) :
         }
     }
 
-    // COVER: GEMINI LYRICS + EROQ REAL AUDIO
+    // COVER: GEMINI ONLY - EROQ KULLANILMAZ
     fun generateCover() {
         if (_isGeneratingCover.value) return
 
         if (coverTargetVocal.value.id == "user_own_voice") {
             _coverMessage.value =
-                "Kendi sesin seçili. Önce ses kaydı ve ses modeli desteği gerekir."
+                "Kendi sesin seçili. Bu bölüm şu anda yalnızca söz ve aranje metni oluşturur."
             return
         }
 
         viewModelScope.launch {
             _isGeneratingCover.value = true
-            _coverMessage.value = "Gemini cover sözlerini ve aranjeyi hazırlıyor..."
+            _coverMessage.value =
+                "Gemini şarkı sözlerini ve aranje notunu hazırlıyor..."
+
             _generatedCover.value = null
             _generatedCoverAudioUrl.value = null
 
@@ -549,58 +550,11 @@ class MusicStudioViewModel(application: Application) :
 
                 _generatedCover.value = cover
                 _coverMessage.value =
-                    "Sözler hazır. Eroq Music One gerçek kadın vokalli müziği hazırlıyor..."
-
-                val style = buildString {
-                    append("Turkish language, ")
-                    append(selectedVocal.gender.displayName)
-                    append(" lead vocal, ")
-                    append(selectedVocal.name)
-                    append(" vocal tone, ")
-                    append(selectedGenre.displayName)
-                    append(", ")
-                    append(coverNotes.value)
-                    append(", ")
-                    append(cover.instrumentation)
-                    append(", ")
-                    append(cover.vocalDirection)
-                    append(", natural Turkish pronunciation, professional studio production")
-                }
-
-                val prompt = buildString {
-                    append("Create a new Turkish song inspired by the theme: ")
-                    append(originalTitle)
-                    append(". Genre: ")
-                    append(selectedGenre.displayName)
-                    append(". Vocal: ")
-                    append(selectedVocal.gender.displayName)
-                    append(", ")
-                    append(selectedVocal.name)
-                    append(". Sing all lyrics in Turkish with natural Turkish pronunciation. ")
-                    append(coverNotes.value)
-                }
-
-                val result = eroqService.generateMusicAndWait(
-                    prompt = prompt,
-                    style = style,
-                    lyrics = cover.lyrics,
-                    title = cover.title,
-                    seconds = 60,
-                    instrumental = false
-                )
-
-                val audioUrl = result.optString("audioUrl", "")
-                require(audioUrl.startsWith("http")) {
-                    "Eroq geçerli MP3 bağlantısı döndürmedi."
-                }
-
-                _generatedCoverAudioUrl.value = audioUrl
-                _coverMessage.value =
-                    "Gerçek cover müziği hazır! Dinleyebilir ve kütüphaneye kaydedebilirsin."
+                    "Cover sözleri ve aranje notu hazır. Eroq kullanılmadı; kredi harcanmadı. Bu bölüm MP3 üretmez."
 
             } catch (e: Exception) {
                 _coverMessage.value =
-                    "Cover üretim hatası: ${e.message ?: "Bilinmeyen hata"}"
+                    "Cover sözleri oluşturma hatası: ${e.message ?: "Bilinmeyen hata"}"
             } finally {
                 _isGeneratingCover.value = false
             }
@@ -608,25 +562,14 @@ class MusicStudioViewModel(application: Application) :
     }
 
     fun playGeneratedCover() {
-        val url = _generatedCoverAudioUrl.value
-        if (url.isNullOrBlank()) {
-            _coverMessage.value = "Önce gerçek cover MP3 dosyasını oluşturmalısın."
-            return
-        }
-
-        audioEngine.playUrl(url = url, bpm = 126)
-        _coverMessage.value = "Gerçek cover MP3 oynatılıyor."
+        _coverMessage.value =
+            "Gemini Cover bölümü MP3 üretmez veya oynatmaz."
     }
 
     fun saveGeneratedCover() {
         val cover = _generatedCover.value ?: run {
-            _coverMessage.value = "Kaydedilecek cover bulunamadı."
-            return
-        }
-
-        val audioUrl = _generatedCoverAudioUrl.value
-        if (audioUrl.isNullOrBlank()) {
-            _coverMessage.value = "Cover sözleri hazır ancak gerçek MP3 henüz üretilmedi."
+            _coverMessage.value =
+                "Kaydedilecek cover sözleri bulunamadı."
             return
         }
 
@@ -636,7 +579,7 @@ class MusicStudioViewModel(application: Application) :
                     title = cover.title,
                     lyrics = cover.lyrics,
                     genre = coverTargetGenre.value.displayName,
-                    mood = "Cover Yeniden Yorumu",
+                    mood = "Cover Sözleri",
                     tempoBpm = 126,
                     musicalKey = "E Minör",
                     chordProgression = cover.chordProgression,
@@ -644,14 +587,17 @@ class MusicStudioViewModel(application: Application) :
                     vocalGender = coverTargetVocal.value.gender.name,
                     coverSourceSong = coverOriginalTitle.value,
                     isCover = true,
-                    audioUrl = audioUrl,
+                    audioUrl = null,
                     audioFilePath = null,
-                    durationSeconds = 60
+                    durationSeconds = null
                 )
 
                 db.songDao().insertSong(item)
                 _activePlayingSong.value = item
-                _coverMessage.value = "Gerçek cover kütüphaneye kaydedildi."
+
+                _coverMessage.value =
+                    "Cover sözleri kütüphaneye kaydedildi. MP3 oluşturulmadı."
+
             } catch (e: Exception) {
                 _coverMessage.value =
                     "Cover kaydetme hatası: ${e.message ?: "Bilinmeyen hata"}"
