@@ -1,3 +1,4 @@
+
 package com.example.ui.screens
 
 import androidx.compose.foundation.Image
@@ -24,13 +25,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -58,9 +55,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
-import com.example.model.MusicGenre
-import com.example.model.SongItem
-import com.example.model.VocalGender
 import com.example.ui.components.AudioVisualizerWaveform
 import com.example.ui.components.GenreSelectorChips
 import com.example.ui.components.VocalToneSelectorCard
@@ -70,7 +64,6 @@ import com.example.ui.theme.NeonGreen
 import com.example.ui.theme.NeonMagenta
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.StudioCardBg
-import com.example.ui.theme.StudioSurface
 import com.example.ui.theme.StudioSurfaceVariant
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
@@ -88,10 +81,16 @@ fun ComposeScreen(
     val selectedVocal by viewModel.composeVocalTone.collectAsState()
     val selectedKey by viewModel.composeKey.collectAsState()
     val bpm by viewModel.composeBpm.collectAsState()
+
     val isGenerating by viewModel.isGeneratingSong.collectAsState()
     val generatedResult by viewModel.generatedSong.collectAsState()
-    val isPlaying by viewModel.audioEngine.isPlaying.collectAsState()
-    val amplitudes by viewModel.audioEngine.visualizerAmplitudes.collectAsState()
+    val generatedAudioUrl by viewModel.generatedSongAudioUrl.collectAsState()
+    val generationMessage by viewModel.generationMessage.collectAsState()
+
+    val isPlaying by viewModel.isAudioPlaying.collectAsState()
+    val isPreparing by viewModel.isAudioPreparing.collectAsState()
+    val playbackError by viewModel.audioPlaybackError.collectAsState()
+    val amplitudes by viewModel.visualizerAmplitudes.collectAsState()
 
     val quickThemes = listOf(
         "Gece sürüşü ve neon ışıklar",
@@ -101,7 +100,14 @@ fun ComposeScreen(
         "Yaz festivali ve dans"
     )
 
-    val musicalKeys = listOf("A Minör", "E Minör", "D Minör", "C Majör", "G Majör", "F# Minör")
+    val musicalKeys = listOf(
+        "A Minör",
+        "E Minör",
+        "D Minör",
+        "C Majör",
+        "G Majör",
+        "F# Minör"
+    )
 
     LazyColumn(
         modifier = modifier
@@ -109,81 +115,116 @@ fun ComposeScreen(
             .padding(bottom = 72.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Hero Studio Banner
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(140.dp)
-                    .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+                    .clip(
+                        RoundedCornerShape(
+                            bottomStart = 24.dp,
+                            bottomEnd = 24.dp
+                        )
+                    )
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.img_studio_banner),
+                    painter = painterResource(
+                        id = R.drawable.img_studio_banner
+                    ),
                     contentDescription = "Studio Banner",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                listOf(Color.Transparent, Color(0xDD0C0A17))
+                                listOf(
+                                    Color.Transparent,
+                                    Color(0xDD0C0A17)
+                                )
                             )
                         )
                 )
+
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(16.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = null,
                             tint = NeonCyan,
                             modifier = Modifier.size(18.dp)
                         )
+
                         Spacer(modifier = Modifier.width(6.dp))
+
                         Text(
                             text = "AI BESTE & ŞARKI SÖZÜ STÜDYOSU",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
                             color = NeonCyan,
                             letterSpacing = 1.sp
                         )
                     }
+
                     Text(
                         text = "Melodi, Akor ve Sözleri Anında Üret",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
                         color = TextPrimary
                     )
                 }
             }
         }
 
-        // Theme Input
+        // SONG THEME
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                colors = CardDefaults.cardColors(
+                    containerColor = StudioCardBg
+                )
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
                     Text(
                         text = "Şarkı Teması / Konusu",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
                         color = TextPrimary
                     )
+
                     Spacer(modifier = Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = themeText,
-                        onValueChange = { viewModel.composeTheme.value = it },
+                        onValueChange = {
+                            viewModel.composeTheme.value = it
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("compose_theme_input"),
-                        placeholder = { Text("Örn: Geceleyin yağmurlu İstanbul sokaklarında kaybolmak...", color = TextMuted) },
+                        placeholder = {
+                            Text(
+                                "Örn: Geceleyin yağmurlu İstanbul sokaklarında kaybolmak...",
+                                color = TextMuted
+                            )
+                        },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = NeonViolet,
                             unfocusedBorderColor = StudioSurfaceVariant,
@@ -200,7 +241,9 @@ fun ComposeScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = TextMuted
                     )
+
                     Spacer(modifier = Modifier.height(4.dp))
+
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -209,8 +252,13 @@ fun ComposeScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(StudioSurfaceVariant)
-                                    .clickable { viewModel.composeTheme.value = quick }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    .clickable {
+                                        viewModel.composeTheme.value = quick
+                                    }
+                                    .padding(
+                                        horizontal = 8.dp,
+                                        vertical = 4.dp
+                                    )
                             ) {
                                 Text(
                                     text = quick,
@@ -224,38 +272,53 @@ fun ComposeScreen(
             }
         }
 
-        // Music Genre Selector
+        // GENRE
         item {
             Column {
                 Text(
                     text = "Müzik Stili & Türü",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
                     color = TextPrimary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(
+                        horizontal = 16.dp,
+                        vertical = 4.dp
+                    )
                 )
+
                 GenreSelectorChips(
                     selectedGenre = selectedGenre,
                     onSelectGenre = {
                         viewModel.composeGenre.value = it
-                        viewModel.composeBpm.value = it.bpmRange.first + (it.bpmRange.last - it.bpmRange.first) / 2
+                        viewModel.composeBpm.value =
+                            it.bpmRange.first +
+                                (it.bpmRange.last - it.bpmRange.first) / 2
                     }
                 )
             }
         }
 
-        // Vocal Selection (Male / Female / User Voice)
+        // VOCAL
         item {
             VocalToneSelectorCard(
                 selectedTone = selectedVocal,
-                onSelectTone = { viewModel.composeVocalTone.value = it },
-                onRecordVoiceClick = { viewModel.showVoiceRecordingDialog.value = true }
+                onSelectTone = {
+                    viewModel.composeVocalTone.value = it
+                },
+                onRecordVoiceClick = {
+                    viewModel.showVoiceRecordingDialog.value = true
+                }
             )
         }
 
-        // User Voice Recording Callout Banner
+        // USER VOICE
         item {
-            val hasRecordedUserVoice by viewModel.voiceRecorder.hasRecording.collectAsState()
-            val isCustomVoiceSelected = selectedVocal.id == "user_own_voice"
+            val hasRecordedUserVoice by
+                viewModel.voiceRecorder.hasRecording.collectAsState()
+
+            val isCustomVoiceSelected =
+                selectedVocal.id == "user_own_voice"
 
             Card(
                 modifier = Modifier
@@ -263,13 +326,19 @@ fun ComposeScreen(
                     .padding(horizontal = 16.dp)
                     .border(
                         1.5.dp,
-                        Brush.horizontalGradient(listOf(NeonMagenta, NeonCyan)),
+                        Brush.horizontalGradient(
+                            listOf(NeonMagenta, NeonCyan)
+                        ),
                         RoundedCornerShape(16.dp)
                     )
-                    .clickable { viewModel.showVoiceRecordingDialog.value = true }
+                    .clickable {
+                        viewModel.showVoiceRecordingDialog.value = true
+                    }
                     .testTag("user_voice_banner_card"),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioSurfaceVariant.copy(alpha = 0.7f))
+                colors = CardDefaults.cardColors(
+                    containerColor = StudioSurfaceVariant.copy(alpha = 0.7f)
+                )
             ) {
                 Row(
                     modifier = Modifier
@@ -282,7 +351,9 @@ fun ComposeScreen(
                             .size(46.dp)
                             .clip(CircleShape)
                             .background(
-                                Brush.linearGradient(listOf(NeonMagenta, NeonViolet))
+                                Brush.linearGradient(
+                                    listOf(NeonMagenta, NeonViolet)
+                                )
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -296,27 +367,44 @@ fun ComposeScreen(
 
                     Spacer(modifier = Modifier.width(12.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
                                 text = "Kendi Sesinle Söylet",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
                                 color = TextPrimary
                             )
+
                             Spacer(modifier = Modifier.width(6.dp))
+
                             if (isCustomVoiceSelected) {
                                 Text(
                                     text = "AKTİF",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
                                     color = NeonGreen,
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(4.dp))
-                                        .background(NeonGreen.copy(alpha = 0.2f))
-                                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                                        .background(
+                                            NeonGreen.copy(alpha = 0.2f)
+                                        )
+                                        .padding(
+                                            horizontal = 6.dp,
+                                            vertical = 1.dp
+                                        )
                                 )
                             }
                         }
+
                         Spacer(modifier = Modifier.height(2.dp))
+
                         Text(
                             text = if (hasRecordedUserVoice) {
                                 "Kaydedilmiş ses örneğiniz hazır! Dokunarak şarkıyı kendi sesinizle söyletin."
@@ -331,14 +419,25 @@ fun ComposeScreen(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     Button(
-                        onClick = { viewModel.showVoiceRecordingDialog.value = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = NeonMagenta),
+                        onClick = {
+                            viewModel.showVoiceRecordingDialog.value = true
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = NeonMagenta
+                        ),
                         shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        contentPadding = PaddingValues(
+                            horizontal = 10.dp,
+                            vertical = 6.dp
+                        ),
                         modifier = Modifier.testTag("user_voice_record_btn")
                     ) {
                         Text(
-                            text = if (hasRecordedUserVoice) "Düzenle" else "Kaydet",
+                            text = if (hasRecordedUserVoice) {
+                                "Düzenle"
+                            } else {
+                                "Kaydet"
+                            },
                             color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
@@ -348,16 +447,20 @@ fun ComposeScreen(
             }
         }
 
-        // Arrangement Controls (Key & BPM)
+        // BPM AND KEY
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                colors = CardDefaults.cardColors(
+                    containerColor = StudioCardBg
+                )
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -365,12 +468,17 @@ fun ComposeScreen(
                     ) {
                         Text(
                             text = "Aranje & Tempo Ayarları",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
                             color = TextPrimary
                         )
+
                         Text(
                             text = "$bpm BPM",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
                             color = NeonAmber
                         )
                     }
@@ -408,19 +516,39 @@ fun ComposeScreen(
                     ) {
                         items(musicalKeys) { key ->
                             val isKeySelected = key == selectedKey
+
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isKeySelected) NeonViolet else StudioSurfaceVariant)
-                                    .clickable { viewModel.composeKey.value = key }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .background(
+                                        if (isKeySelected) {
+                                            NeonViolet
+                                        } else {
+                                            StudioSurfaceVariant
+                                        }
+                                    )
+                                    .clickable {
+                                        viewModel.composeKey.value = key
+                                    }
+                                    .padding(
+                                        horizontal = 10.dp,
+                                        vertical = 6.dp
+                                    )
                             ) {
                                 Text(
                                     text = key,
                                     style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = if (isKeySelected) FontWeight.Bold else FontWeight.Normal
+                                        fontWeight = if (isKeySelected) {
+                                            FontWeight.Bold
+                                        } else {
+                                            FontWeight.Normal
+                                        }
                                     ),
-                                    color = if (isKeySelected) Color.White else TextSecondary
+                                    color = if (isKeySelected) {
+                                        Color.White
+                                    } else {
+                                        TextSecondary
+                                    }
                                 )
                             }
                         }
@@ -429,7 +557,7 @@ fun ComposeScreen(
             }
         }
 
-        // Generate Action Button
+        // GENERATE SONG
         item {
             Box(
                 modifier = Modifier
@@ -437,14 +565,18 @@ fun ComposeScreen(
                     .padding(horizontal = 16.dp)
             ) {
                 Button(
-                    onClick = { viewModel.generateSong() },
+                    onClick = {
+                        viewModel.generateSong()
+                    },
                     enabled = !isGenerating,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp)
                         .testTag("generate_song_button"),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Transparent
+                    ),
                     contentPadding = PaddingValues(0.dp)
                 ) {
                     Box(
@@ -452,37 +584,53 @@ fun ComposeScreen(
                             .fillMaxSize()
                             .background(
                                 Brush.horizontalGradient(
-                                    listOf(NeonViolet, NeonMagenta, NeonCyan)
+                                    listOf(
+                                        NeonViolet,
+                                        NeonMagenta,
+                                        NeonCyan
+                                    )
                                 )
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         if (isGenerating) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 CircularProgressIndicator(
                                     color = Color.White,
                                     modifier = Modifier.size(20.dp),
                                     strokeWidth = 2.dp
                                 )
+
                                 Spacer(modifier = Modifier.width(10.dp))
+
                                 Text(
-                                    text = "AI Bestesi & Sözleri Yazılıyor...",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    text = "Şarkı hazırlanıyor...",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
                                     color = Color.White
                                 )
                             }
                         } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.AutoAwesome,
                                     contentDescription = null,
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp)
                                 )
+
                                 Spacer(modifier = Modifier.width(8.dp))
+
                                 Text(
-                                    text = "AI İLE BESTE & SÖZ YAZ",
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                    text = "GERÇEK ŞARKI ÜRET",
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
                                     color = Color.White,
                                     letterSpacing = 0.5.sp
                                 )
@@ -493,9 +641,22 @@ fun ComposeScreen(
             }
         }
 
-        // Generated Song Display Card
+        // GENERATION MESSAGE
+        if (generationMessage.isNotBlank()) {
+            item {
+                Text(
+                    text = generationMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NeonCyan,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+            }
+        }
+
+        // GENERATED SONG
         if (generatedResult != null) {
             val song = generatedResult!!
+
             item {
                 Card(
                     modifier = Modifier
@@ -503,84 +664,115 @@ fun ComposeScreen(
                         .padding(horizontal = 16.dp)
                         .border(
                             1.dp,
-                            Brush.horizontalGradient(listOf(NeonViolet, NeonCyan)),
+                            Brush.horizontalGradient(
+                                listOf(NeonViolet, NeonCyan)
+                            ),
                             RoundedCornerShape(18.dp)
                         ),
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                    colors = CardDefaults.cardColors(
+                        containerColor = StudioCardBg
+                    )
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "🎵 ${song.title}",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = TextPrimary
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = "${selectedGenre.displayName} • ${selectedVocal.name}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NeonCyan
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // REAL MP3 PLAY BUTTON
+                        Button(
+                            onClick = {
+                                if (isPlaying) {
+                                    viewModel.pausePlayback()
+                                } else if (isPreparing) {
+                                    // Hazırlık sürerken tekrar başlatma.
+                                } else {
+                                    viewModel.playGeneratedSong()
+                                }
+                            },
+                            enabled = generatedAudioUrl != null &&
+                                !isPreparing,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("play_real_mp3_btn"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NeonViolet,
+                                disabledContainerColor =
+                                    NeonViolet.copy(alpha = 0.35f)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "🎵 " + song.title,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = TextPrimary
+                            if (isPreparing) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "${selectedGenre.displayName} • ${selectedVocal.name}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = NeonCyan
-                                )
-                            }
 
-                            Row {
-                                Button(
-                                    onClick = {
-                                        val songItem = SongItem(
-                                            title = song.title,
-                                            lyrics = song.lyrics,
-                                            genre = selectedGenre.displayName,
-                                            mood = moodText,
-                                            tempoBpm = bpm,
-                                            musicalKey = selectedKey,
-                                            chordProgression = song.chordProgression,
-                                            vocalToneName = selectedVocal.name,
-                                            vocalGender = selectedVocal.gender.name
-                                        )
-                                        viewModel.playSongAudio(songItem)
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Text("MP3 hazırlanıyor...")
+                            } else {
+                                Icon(
+                                    imageVector = if (isPlaying) {
+                                        Icons.Default.Stop
+                                    } else {
+                                        Icons.Default.PlayArrow
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = NeonViolet),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                    modifier = Modifier.testTag("play_synth_btn")
-                                ) {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(if (isPlaying) "Durdur" else "Canlı Çal", fontSize = 12.sp)
-                                }
+                                    contentDescription = null
+                                )
 
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
 
-                                Button(
-                                    onClick = { viewModel.saveGeneratedSong() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = NeonGreen.copy(alpha = 0.2f)),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                    modifier = Modifier.testTag("save_song_btn")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.BookmarkAdd,
-                                        contentDescription = null,
-                                        tint = NeonGreen,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
+                                Text(
+                                    if (isPlaying) {
+                                        "Duraklat"
+                                    } else {
+                                        "Gerçek Şarkıyı Dinle"
+                                    }
+                                )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        if (generatedAudioUrl == null) {
+                            Spacer(modifier = Modifier.height(6.dp))
 
-                        // Visualizer Waveform preview
+                            Text(
+                                text = "Gerçek MP3 bağlantısı henüz hazır değil.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted
+                            )
+                        }
+
+                        if (!playbackError.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = playbackError,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NeonMagenta
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
                         AudioVisualizerWaveform(
                             amplitudes = amplitudes,
                             isPlaying = isPlaying
@@ -588,7 +780,6 @@ fun ComposeScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Info Tags (Akorlar, Enstrümanlar, Vokal Yönlendirme)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -601,10 +792,22 @@ fun ComposeScreen(
                                     .padding(8.dp)
                             ) {
                                 Column {
-                                    Text("🎹 Akor Dizisi", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                                    Text(song.chordProgression, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = NeonAmber)
+                                    Text(
+                                        "🎹 Akor Dizisi",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextMuted
+                                    )
+
+                                    Text(
+                                        song.chordProgression,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = NeonAmber
+                                    )
                                 }
                             }
+
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -613,17 +816,57 @@ fun ComposeScreen(
                                     .padding(8.dp)
                             ) {
                                 Column {
-                                    Text("🎙️ Vokal Karakteri", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                                    Text(selectedVocal.tag, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = NeonMagenta)
+                                    Text(
+                                        "🎙️ Vokal Karakteri",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextMuted
+                                    )
+
+                                    Text(
+                                        selectedVocal.tag,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = NeonMagenta
+                                    )
                                 }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
 
+                        // SAVE SONG
+                        Button(
+                            onClick = {
+                                viewModel.saveGeneratedSong()
+                            },
+                            enabled = generatedAudioUrl != null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("save_song_btn"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NeonGreen.copy(alpha = 0.2f),
+                                contentColor = NeonGreen
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BookmarkAdd,
+                                contentDescription = null
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Text("Şarkıyı Kütüphaneye Kaydet")
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
                         Text(
-                            text = "Şarkı Sözleri & Akor Düzeni",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            text = "Şarkı Sözleri",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
                             color = TextPrimary
                         )
 
@@ -633,12 +876,16 @@ fun ComposeScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(StudioSurfaceVariant.copy(alpha = 0.5f))
+                                .background(
+                                    StudioSurfaceVariant.copy(alpha = 0.5f)
+                                )
                                 .padding(12.dp)
                         ) {
                             Text(
                                 text = song.lyrics,
-                                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    lineHeight = 22.sp
+                                ),
                                 color = TextPrimary
                             )
                         }
