@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -90,8 +91,13 @@ fun ComposeScreen(
     val isPlaying by viewModel.isAudioPlaying.collectAsState()
     val isPreparing by viewModel.isAudioPreparing.collectAsState()
     val playbackError by viewModel.audioPlaybackError.collectAsState()
-    val playbackErrorText = playbackError
     val amplitudes by viewModel.visualizerAmplitudes.collectAsState()
+
+    val downloadingSongId by viewModel.downloadingSongId.collectAsState()
+    val downloadMessage by viewModel.downloadMessage.collectAsState()
+
+    val isDownloadingGeneratedSong =
+        downloadingSongId == generatedResult?.id
 
     val quickThemes = listOf(
         "Gece sürüşü ve neon ışıklar",
@@ -188,7 +194,6 @@ fun ComposeScreen(
             }
         }
 
-        // SONG THEME
         item {
             Card(
                 modifier = Modifier
@@ -273,7 +278,6 @@ fun ComposeScreen(
             }
         }
 
-        // GENRE
         item {
             Column {
                 Text(
@@ -300,7 +304,6 @@ fun ComposeScreen(
             }
         }
 
-        // VOCAL
         item {
             VocalToneSelectorCard(
                 selectedTone = selectedVocal,
@@ -313,7 +316,6 @@ fun ComposeScreen(
             )
         }
 
-        // USER VOICE
         item {
             val hasRecordedUserVoice by
                 viewModel.voiceRecorder.hasRecording.collectAsState()
@@ -448,7 +450,6 @@ fun ComposeScreen(
             }
         }
 
-        // BPM AND KEY
         item {
             Card(
                 modifier = Modifier
@@ -558,7 +559,6 @@ fun ComposeScreen(
             }
         }
 
-        // GENERATE SONG
         item {
             Box(
                 modifier = Modifier
@@ -642,7 +642,6 @@ fun ComposeScreen(
             }
         }
 
-        // GENERATION MESSAGE
         if (generationMessage.isNotBlank()) {
             item {
                 Text(
@@ -654,7 +653,6 @@ fun ComposeScreen(
             }
         }
 
-        // GENERATED SONG
         if (generatedResult != null) {
             val song = generatedResult!!
 
@@ -696,7 +694,6 @@ fun ComposeScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // REAL MP3 PLAY BUTTON
                         Button(
                             onClick = {
                                 if (isPlaying) {
@@ -760,8 +757,7 @@ fun ComposeScreen(
                             )
                         }
 
-                        // PLAYBACK ERROR
-                        playbackErrorText
+                        playbackError
                             ?.takeIf { it.isNotBlank() }
                             ?.let { error ->
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -837,7 +833,6 @@ fun ComposeScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // SAVE SONG
                         Button(
                             onClick = {
                                 viewModel.saveGeneratedSong()
@@ -860,6 +855,60 @@ fun ComposeScreen(
                             Spacer(modifier = Modifier.width(8.dp))
 
                             Text("Şarkıyı Kütüphaneye Kaydet")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Button(
+                            onClick = {
+                                viewModel.downloadGeneratedSong()
+                            },
+                            enabled = generatedAudioUrl != null &&
+                                !isDownloadingGeneratedSong,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("download_generated_mp3_btn"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NeonCyan.copy(alpha = 0.2f),
+                                contentColor = NeonCyan,
+                                disabledContainerColor =
+                                    NeonCyan.copy(alpha = 0.08f),
+                                disabledContentColor = TextMuted
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            if (isDownloadingGeneratedSong) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = NeonCyan
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.FileDownload,
+                                    contentDescription = null
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Text(
+                                if (isDownloadingGeneratedSong) {
+                                    "MP3 TELEFONA İNDİRİLİYOR..."
+                                } else {
+                                    "MP3'Ü TELEFONA İNDİR"
+                                }
+                            )
+                        }
+
+                        if (!downloadMessage.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = downloadMessage.orEmpty(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NeonGreen
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
