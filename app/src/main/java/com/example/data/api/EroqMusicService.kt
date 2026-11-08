@@ -109,26 +109,42 @@ class EroqMusicService {
                 "Eroq üretim isteğini kabul etti ancak iş kimliği bulunamadı. Yanıt: $generation"
             )
 
+        // İlk yanıtta MP3 bağlantısı varsa beklemeden kullan.
+        val initialAudioUrl = findAudioUrl(generation)
+
+        if (!initialAudioUrl.isNullOrBlank()) {
+            return createSuccessResult(
+                jobId = jobId,
+                status = generation.optString("status", "completed"),
+                title = generation.optString("title", title),
+                audioUrl = initialAudioUrl,
+                seconds = generation.optInt("seconds", seconds),
+                rawResponse = generation
+            )
+        }
+
+        // İlk yanıtta bağlantı yoksa üretim durumunu kontrol et.
         repeat(MAX_POLL_ATTEMPTS) {
 
             delay(POLL_INTERVAL_MS)
 
             val statusResult = getMusicStatus(jobId)
-            val status = statusResult.optString("status", "")
+
+            val status = statusResult
+                .optString("status", "unknown")
                 .lowercase()
 
             val audioUrl = findAudioUrl(statusResult)
 
             if (!audioUrl.isNullOrBlank()) {
-                return JSONObject().apply {
-                    put("ok", true)
-                    put("id", jobId)
-                    put("status", status)
-                    put("title", statusResult.optString("title", title))
-                    put("audioUrl", audioUrl)
-                    put("seconds", statusResult.optInt("seconds", seconds))
-                    put("rawResponse", statusResult)
-                }
+                return createSuccessResult(
+                    jobId = jobId,
+                    status = status,
+                    title = statusResult.optString("title", title),
+                    audioUrl = audioUrl,
+                    seconds = statusResult.optInt("seconds", seconds),
+                    rawResponse = statusResult
+                )
             }
 
             if (
@@ -145,6 +161,26 @@ class EroqMusicService {
         throw IOException(
             "Müzik üretimi zaman aşımına uğradı. Daha sonra durum tekrar kontrol edilmeli."
         )
+    }
+
+    private fun createSuccessResult(
+        jobId: String,
+        status: String,
+        title: String,
+        audioUrl: String,
+        seconds: Int,
+        rawResponse: JSONObject
+    ): JSONObject {
+
+        return JSONObject().apply {
+            put("ok", true)
+            put("id", jobId)
+            put("status", status)
+            put("title", title)
+            put("audioUrl", audioUrl)
+            put("seconds", seconds)
+            put("rawResponse", rawResponse)
+        }
     }
 
     private fun extractJobId(response: JSONObject): String? {
@@ -179,58 +215,123 @@ class EroqMusicService {
 
     private fun findAudioUrl(json: JSONObject): String? {
 
-        val directKeys = listOf(
+        val preferredKeys = listOf(
             "audioUrl",
             "audio_url",
-            "url",
-            "mp3",
+            "downloadUrl",
             "download_url",
-            "downloadUrl"
+            "mp3Url",
+            "mp3_url",
+            "audioFileUrl",
+            "audio_file_url",
+            "fileUrl",
+            "file_url",
+            "mp3",
+            "url"
         )
 
-        for (key in directKeys) {
-            val value = json.optString(key, "")
-            if (isAudioUrl(value)) return value
-        }
+        val nestedKeys = listOf(
+            "data",
+            "result",
+            "results",
+            "output",
+            "outputs",
+            "audio",
+            "track",
+            "tracks",
+            "file",
+            "files",
+            "job",
+            "jobs"
+        )
 
-        val data = json.opt("data")
+        val visited = HashSet<Int>()
+        var checked = 0
 
-        when (data) {
-            is JSONObject -> {
-                findAudioUrl(data)?.let { return it }
+        fun search(value: Any?, depth: Int): String? {
+
+            if (
+                value == null ||
+                depth > 10 ||
+                checked > 300
+            ) {
+                return null
             }
 
-            is JSONArray -> {
-                for (i in 0 until data.length()) {
-                    val item = data.optJSONObject(i)
-                    if (item != null) {
-                        findAudioUrl(item)?.let { return it }
+            if (value is JSONObject || value is JSONArray) {
+                val identity = System.identityHashCode(value)
+
+                if (!visited.add(identity)) {
+                    return null
+                }
+
+                checked++
+            }
+
+            when (value) {
+                is JSONObject -> {
+
+                    for (key in preferredKeys) {
+                        val candidate = value.optString(key, "")
+
+                        if (isAudioUrl(candidate)) {
+                            return candidate
+                        }
+                    }
+
+                    for (key in nestedKeys) {
+                        val child = value.opt(key)
+
+                        val found = search(child, depth + 1)
+
+                        if (found != null) return found
+                    }
+
+                    val keys = value.keys()
+
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+
+                        if (nestedKeys.contains(key)) continue
+
+                        val child = value.opt(key)
+
+                        if (
+                            child is JSONObject ||
+                            child is JSONArray
+                        ) {
+                            val found = search(child, depth + 1)
+
+                            if (found != null) return found
+                        }
+                    }
+                }
+
+                is JSONArray -> {
+
+                    for (i in 0 until value.length()) {
+                        val found = search(
+                            value.opt(i),
+                            depth + 1
+                        )
+
+                        if (found != null) return found
                     }
                 }
             }
+
+            return null
         }
 
-        val jobs = json.optJSONArray("jobs")
-        if (jobs != null) {
-            for (i in 0 until jobs.length()) {
-                val item = jobs.optJSONObject(i)
-                if (item != null) {
-                    findAudioUrl(item)?.let { return it }
-                }
-            }
-        }
-
-        val result = json.optJSONObject("result")
-        if (result != null) {
-            findAudioUrl(result)?.let { return it }
-        }
-
-        return null
+        return search(json, 0)
     }
 
     private fun isAudioUrl(value: String): Boolean {
-        return value.startsWith("https://") ||
-            value.startsWith("http://")
+
+        val cleanValue = value.trim()
+
+        return cleanValue.startsWith("https://") ||
+            cleanValue.startsWith("http://")
     }
 
     private fun executeRequest(request: Request): JSONObject {
