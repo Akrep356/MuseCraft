@@ -20,9 +20,9 @@ import com.example.model.VirtualArtist
 import com.example.model.VocalGender
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -224,14 +224,16 @@ class MusicStudioViewModel(application: Application) :
         }
     }
 
-    // GEMINI LYRICS + EROQ REAL MUSIC
+    // STEP 1: GENERATE LYRICS WITH GEMINI ONLY
+    // Bu fonksiyon EROQ servisini çağırmaz ve müzik kredisi harcamaz.
     fun generateSong() {
         if (_isGeneratingSong.value) return
 
         viewModelScope.launch {
             _isGeneratingSong.value = true
+
             _generationMessage.value =
-                "Şarkı sözleri hazırlanıyor..."
+                "Gemini şarkı sözlerini, akorları ve aranjeyi hazırlıyor..."
 
             _generatedSongAudioUrl.value = null
             _generatedSong.value = null
@@ -251,8 +253,43 @@ class MusicStudioViewModel(application: Application) :
                 _generatedSong.value = lyricsResult
 
                 _generationMessage.value =
-                    "Eroq gerçek müzik ve vokal üretiyor..."
+                    "Şarkı sözleri hazır! İncele. Gerçek müzik üretmek için ikinci düğmeye bas."
 
+            } catch (e: Exception) {
+                _generationMessage.value =
+                    "Şarkı sözü hazırlama hatası: ${e.message ?: "Bilinmeyen hata"}"
+            } finally {
+                _isGeneratingSong.value = false
+            }
+        }
+    }
+
+    // STEP 2: GENERATE REAL MUSIC WITH EROQ
+    // Bu fonksiyon yalnızca kullanıcı ayrıca çağırdığında çalışır.
+    fun generateRealSong() {
+        if (_isGeneratingSong.value) return
+
+        val lyricsResult = _generatedSong.value
+
+        if (lyricsResult == null) {
+            _generationMessage.value =
+                "Önce Gemini ile şarkı sözlerini oluşturmalısın."
+            return
+        }
+
+        if (!_generatedSongAudioUrl.value.isNullOrBlank()) {
+            _generationMessage.value =
+                "Bu şarkının gerçek MP3 dosyası zaten hazır."
+            return
+        }
+
+        viewModelScope.launch {
+            _isGeneratingSong.value = true
+
+            _generationMessage.value =
+                "Eroq Music One gerçek müziği ve vokali üretiyor..."
+
+            try {
                 val selectedVocal = composeVocalTone.value
 
                 val style = buildString {
@@ -319,11 +356,11 @@ class MusicStudioViewModel(application: Application) :
                     lyricsResult.copy(title = finalTitle)
 
                 _generationMessage.value =
-                    "Gerçek şarkı hazır. Dinleyebilir veya kaydedebilirsin."
+                    "Gerçek şarkı hazır. Dinleyebilir, kaydedebilir veya MP3 olarak indirebilirsin."
 
             } catch (e: Exception) {
                 _generationMessage.value =
-                    "Üretim hatası: ${e.message ?: "Bilinmeyen hata"}"
+                    "Gerçek müzik üretim hatası: ${e.message ?: "Bilinmeyen hata"}"
             } finally {
                 _isGeneratingSong.value = false
             }
@@ -387,7 +424,11 @@ class MusicStudioViewModel(application: Application) :
             _activePlayingSong.value = item
 
             _generationMessage.value =
-                "Şarkı kütüphaneye kaydedildi."
+                if (_generatedSongAudioUrl.value != null) {
+                    "Gerçek şarkı kütüphaneye kaydedildi."
+                } else {
+                    "Şarkı sözleri kütüphaneye kaydedildi. Gerçek MP3 henüz üretilmedi."
+                }
         }
     }
 
@@ -403,7 +444,7 @@ class MusicStudioViewModel(application: Application) :
 
         if (url.isNullOrBlank()) {
             _downloadMessage.value =
-                "Gerçek MP3 bağlantısı bulunamadı."
+                "Önce gerçek müzik üretmelisin. Henüz MP3 bağlantısı yok."
             return
         }
 
