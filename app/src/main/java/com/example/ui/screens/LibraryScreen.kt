@@ -1,3 +1,4 @@
+
 package com.example.ui.screens
 
 import android.content.ClipData
@@ -26,12 +27,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -52,7 +50,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -65,6 +62,7 @@ import com.example.ui.components.AudioVisualizerWaveform
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonMagenta
+import com.example.ui.theme.NeonGreen
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.StudioCardBg
 import com.example.ui.theme.StudioSurface
@@ -80,19 +78,25 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+
     val allSongs by viewModel.allSongs.collectAsState()
-    val isPlaying by viewModel.audioEngine.isPlaying.collectAsState()
+    val isPlaying by viewModel.isAudioPlaying.collectAsState()
     val activeSong by viewModel.activePlayingSong.collectAsState()
-    val amplitudes by viewModel.audioEngine.visualizerAmplitudes.collectAsState()
+    val amplitudes by viewModel.visualizerAmplitudes.collectAsState()
+    val playbackError by viewModel.audioPlaybackError.collectAsState()
 
     var selectedTabIdx by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Tüm Besteler", "AI Coverlar", "Video Projeleri")
-
     var expandedSongId by remember { mutableStateOf<String?>(null) }
+
+    val tabs = listOf(
+        "Tüm Besteler",
+        "AI Coverlar",
+        "Video Projeleri"
+    )
 
     val filteredSongs = when (selectedTabIdx) {
         1 -> allSongs.filter { it.isCover }
-        else -> allSongs
+        else -> allSongs.filter { !it.isCover }
     }
 
     LazyColumn(
@@ -101,41 +105,63 @@ fun LibraryScreen(
             .padding(bottom = 72.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Library Header
+        // LIBRARY HEADER
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardBg)
+                colors = CardDefaults.cardColors(
+                    containerColor = StudioCardBg
+                )
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(
+                    modifier = Modifier.padding(18.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
                             imageVector = Icons.Default.LibraryMusic,
                             contentDescription = null,
                             tint = NeonAmber,
                             modifier = Modifier.size(24.dp)
                         )
+
                         Spacer(modifier = Modifier.width(8.dp))
+
                         Text(
                             text = "STÜDYO KÜTÜPHANESİ",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
                             color = TextPrimary
                         )
                     }
+
                     Spacer(modifier = Modifier.height(4.dp))
+
                     Text(
-                        text = "Kaydettiğin tüm besteler, akor dizileri, AI coverlar ve video senaryoları.",
+                        text = "Kaydettiğin besteler, gerçek MP3 kayıtları, akor dizileri ve AI coverlar.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "${allSongs.size} kayıtlı şarkı",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = NeonCyan
                     )
                 }
             }
         }
 
-        // Sub Tabs
+        // TABS
         item {
             TabRow(
                 selectedTabIndex = selectedTabIdx,
@@ -143,7 +169,9 @@ fun LibraryScreen(
                 contentColor = NeonCyan,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
-                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIdx]),
+                        modifier = Modifier.tabIndicatorOffset(
+                            tabPositions[selectedTabIdx]
+                        ),
                         color = NeonCyan
                     )
                 },
@@ -152,14 +180,24 @@ fun LibraryScreen(
                 tabs.forEachIndexed { index, title ->
                     Tab(
                         selected = selectedTabIdx == index,
-                        onClick = { selectedTabIdx = index },
+                        onClick = {
+                            selectedTabIdx = index
+                        },
                         text = {
                             Text(
                                 text = title,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = if (selectedTabIdx == index) FontWeight.Bold else FontWeight.Normal
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = if (selectedTabIdx == index) {
+                                        FontWeight.Bold
+                                    } else {
+                                        FontWeight.Normal
+                                    }
                                 ),
-                                color = if (selectedTabIdx == index) NeonCyan else TextSecondary
+                                color = if (selectedTabIdx == index) {
+                                    NeonCyan
+                                } else {
+                                    TextSecondary
+                                }
                             )
                         }
                     )
@@ -167,6 +205,7 @@ fun LibraryScreen(
             }
         }
 
+        // EMPTY LIBRARY
         if (filteredSongs.isEmpty()) {
             item {
                 Box(
@@ -175,22 +214,32 @@ fun LibraryScreen(
                         .padding(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         Icon(
                             imageVector = Icons.Default.MusicNote,
                             contentDescription = null,
                             tint = TextMuted,
                             modifier = Modifier.size(48.dp)
                         )
+
                         Spacer(modifier = Modifier.height(8.dp))
+
                         Text(
-                            text = "Kayıtlı şarkı bulunamadı",
+                            text = if (selectedTabIdx == 1) {
+                                "Kayıtlı cover bulunamadı"
+                            } else {
+                                "Kayıtlı şarkı bulunamadı"
+                            },
                             style = MaterialTheme.typography.titleSmall,
                             color = TextSecondary
                         )
+
                         Spacer(modifier = Modifier.height(4.dp))
+
                         Text(
-                            text = "'Beste & Söz' veya 'Cover' sekmesinden hemen oluşturabilirsin.",
+                            text = "Beste & Söz ekranından yeni bir şarkı oluşturup kütüphanene kaydedebilirsin.",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextMuted
                         )
@@ -198,9 +247,20 @@ fun LibraryScreen(
                 }
             }
         } else {
-            items(filteredSongs) { song ->
-                val isThisPlaying = isPlaying && activeSong?.id == song.id
-                val isExpanded = expandedSongId == song.id
+            items(
+                items = filteredSongs,
+                key = { song -> song.id }
+            ) { song ->
+
+                val isThisPlaying =
+                    isPlaying && activeSong?.id == song.id
+
+                val isExpanded =
+                    expandedSongId == song.id
+
+                val hasRealAudio =
+                    !song.audioUrl.isNullOrBlank() ||
+                        !song.audioFilePath.isNullOrBlank()
 
                 Card(
                     modifier = Modifier
@@ -208,98 +268,195 @@ fun LibraryScreen(
                         .padding(horizontal = 16.dp)
                         .border(
                             1.dp,
-                            if (isThisPlaying) NeonCyan else StudioSurfaceVariant,
+                            if (isThisPlaying) {
+                                NeonCyan
+                            } else {
+                                StudioSurfaceVariant
+                            },
                             RoundedCornerShape(16.dp)
                         )
                         .clickable {
-                            expandedSongId = if (isExpanded) null else song.id
+                            expandedSongId =
+                                if (isExpanded) null else song.id
                         },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (isThisPlaying) StudioSurfaceVariant else StudioCardBg
+                        containerColor = if (isThisPlaying) {
+                            StudioSurfaceVariant
+                        } else {
+                            StudioCardBg
+                        }
                     )
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Column(
+                        modifier = Modifier.padding(14.dp)
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // REAL MP3 PLAY / PAUSE
                             IconButton(
                                 onClick = {
                                     if (isThisPlaying) {
-                                        viewModel.audioEngine.stopTrack()
+                                        viewModel.pausePlayback()
                                     } else {
                                         viewModel.playSongAudio(song)
                                     }
                                 },
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(if (song.isCover) NeonMagenta else NeonViolet)
+                                    .background(
+                                        if (song.isCover) {
+                                            NeonMagenta
+                                        } else {
+                                            NeonViolet
+                                        }
+                                    )
                                     .testTag("lib_play_btn_${song.id}")
                             ) {
                                 Icon(
-                                    imageVector = if (isThisPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                    contentDescription = "Oynat / Durdur",
+                                    imageVector = if (isThisPlaying) {
+                                        Icons.Default.Stop
+                                    } else {
+                                        Icons.Default.PlayArrow
+                                    },
+                                    contentDescription = if (isThisPlaying) {
+                                        "Duraklat"
+                                    } else {
+                                        "Şarkıyı oynat"
+                                    },
                                     tint = Color.White
                                 )
                             }
 
                             Spacer(modifier = Modifier.width(12.dp))
 
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     if (song.isCover) {
                                         Text(
                                             text = "COVER",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.Bold
+                                            ),
                                             color = NeonMagenta,
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(4.dp))
-                                                .background(NeonMagenta.copy(alpha = 0.2f))
-                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                .background(
+                                                    NeonMagenta.copy(alpha = 0.2f)
+                                                )
+                                                .padding(
+                                                    horizontal = 4.dp,
+                                                    vertical = 1.dp
+                                                )
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
+
+                                        Spacer(
+                                            modifier = Modifier.width(6.dp)
+                                        )
                                     }
+
                                     Text(
                                         text = song.title,
-                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.Bold
+                                        ),
                                         color = TextPrimary,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.height(2.dp))
+                                Spacer(modifier = Modifier.height(3.dp))
 
                                 Text(
                                     text = "${song.genre} • ${song.vocalToneName} • ${song.tempoBpm} BPM",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = TextSecondary,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (hasRealAudio) {
+                                        Icon(
+                                            imageVector = Icons.Default.MusicNote,
+                                            contentDescription = null,
+                                            tint = NeonGreen,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+
+                                        Spacer(
+                                            modifier = Modifier.width(4.dp)
+                                        )
+
+                                        Text(
+                                            text = if (!song.audioFilePath.isNullOrBlank()) {
+                                                "MP3 dosyası kayıtlı"
+                                            } else {
+                                                "Gerçek MP3 bağlantısı mevcut"
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = NeonGreen
+                                        )
+                                    } else {
+                                        Text(
+                                            text = "Henüz MP3 kaydı yok",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextMuted
+                                        )
+                                    }
+                                }
                             }
 
+                            // COPY AND DELETE
                             Row {
                                 IconButton(
                                     onClick = {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        val clip = ClipData.newPlainText("Lyrics", "${song.title}\n\n${song.lyrics}")
+                                        val clipboard =
+                                            context.getSystemService(
+                                                Context.CLIPBOARD_SERVICE
+                                            ) as ClipboardManager
+
+                                        val clip = ClipData.newPlainText(
+                                            "Lyrics",
+                                            "${song.title}\n\n${song.lyrics}"
+                                        )
+
                                         clipboard.setPrimaryClip(clip)
-                                        Toast.makeText(context, "Sözler panoya kopyalandı!", Toast.LENGTH_SHORT).show()
+
+                                        Toast.makeText(
+                                            context,
+                                            "Şarkı sözleri panoya kopyalandı!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = "Kopyala",
+                                        contentDescription = "Sözleri kopyala",
                                         tint = TextMuted,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
 
-                                IconButton(onClick = { viewModel.deleteSong(song) }) {
+                                IconButton(
+                                    onClick = {
+                                        viewModel.deleteSong(song)
+                                    }
+                                ) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
-                                        contentDescription = "Sil",
+                                        contentDescription = "Şarkıyı sil",
                                         tint = TextMuted,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -307,14 +464,17 @@ fun LibraryScreen(
                             }
                         }
 
+                        // PLAYING VISUALIZER
                         if (isThisPlaying) {
                             Spacer(modifier = Modifier.height(10.dp))
+
                             AudioVisualizerWaveform(
                                 amplitudes = amplitudes,
                                 isPlaying = true
                             )
                         }
 
+                        // EXPANDED SONG DETAILS
                         if (isExpanded) {
                             Spacer(modifier = Modifier.height(12.dp))
 
@@ -329,12 +489,31 @@ fun LibraryScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text("🎹 Akor: ${song.chordProgression}", style = MaterialTheme.typography.labelSmall, color = NeonAmber)
-                                    Text("🎼 Ton: ${song.musicalKey}", style = MaterialTheme.typography.labelSmall, color = NeonCyan)
+                                    Text(
+                                        text = "🎹 Akor: ${song.chordProgression}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = NeonAmber
+                                    )
+
+                                    Text(
+                                        text = "🎼 Ton: ${song.musicalKey}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = NeonCyan
+                                    )
                                 }
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
+
+                            if (song.durationSeconds != null) {
+                                Text(
+                                    text = "Süre: ${song.durationSeconds} saniye",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+
+                                Spacer(modifier = Modifier.height(6.dp))
+                            }
 
                             Box(
                                 modifier = Modifier
@@ -345,8 +524,22 @@ fun LibraryScreen(
                             ) {
                                 Text(
                                     text = song.lyrics,
-                                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 20.sp),
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        lineHeight = 20.sp
+                                    ),
                                     color = TextPrimary
+                                )
+                            }
+
+                            if (playbackError != null &&
+                                activeSong?.id == song.id
+                            ) {
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    text = playbackError.orEmpty(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NeonMagenta
                                 )
                             }
                         }
