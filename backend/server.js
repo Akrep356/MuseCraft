@@ -1,4 +1,3 @@
-
 const express = require("express");
 const cors = require("cors");
 
@@ -13,10 +12,12 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODELS = [
     "gemini-3.8-flash",
     "gemini-3.7-flash",
+    "gemini-3.6-flash",
     "gemini-3.5-flash-lite"
 ];
 
 const GEMINI_MODEL = GEMINI_MODELS[0];
+
 const GEMINI_API_BASE =
     "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -62,6 +63,7 @@ function isHttpUrl(value) {
 
     try {
         const parsed = new URL(value);
+
         return parsed.protocol === "https:" ||
             parsed.protocol === "http:";
     } catch {
@@ -110,6 +112,7 @@ function findAudioUrl(root) {
                 const found = search(item, depth + 1);
                 if (found) return found;
             }
+
             return null;
         }
 
@@ -142,6 +145,7 @@ function findAudioUrl(root) {
                 Object.prototype.hasOwnProperty.call(value, key)
             ) {
                 const found = search(value[key], depth + 1);
+
                 if (found) return found;
             }
         }
@@ -153,6 +157,7 @@ function findAudioUrl(root) {
 
             if (child && typeof child === "object") {
                 const found = search(child, depth + 1);
+
                 if (found) return found;
             }
         }
@@ -196,7 +201,7 @@ function wait(milliseconds) {
     return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
-// GEMINI ERROR STATUS CHECK
+// GEMINI RETRY STATUS CHECK
 function isRetryableStatus(status) {
     return [
         408,
@@ -345,7 +350,7 @@ async function callGemini(prompt) {
                     nextModel: GEMINI_MODELS[index + 1]
                 });
 
-                await wait(800);
+                await wait(4000);
             }
         }
     }
@@ -685,6 +690,12 @@ app.listen(PORT, "0.0.0.0", () => {
 
     console.log("Eroq Music One integration ready.");
     console.log("Gemini primary model:", GEMINI_MODEL);
-    console.log("Gemini fallback models:", GEMINI_MODELS.join(", "));
-    console.log("Gemini integration ready:", Boolean(GEMINI_API_KEY));
+    console.log(
+        "Gemini fallback models:",
+        GEMINI_MODELS.join(", ")
+    );
+    console.log(
+        "Gemini integration ready:",
+        Boolean(GEMINI_API_KEY)
+    );
 });
