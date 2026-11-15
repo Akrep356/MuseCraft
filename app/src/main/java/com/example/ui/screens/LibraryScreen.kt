@@ -1,10 +1,11 @@
-
 package com.example.ui.screens
 
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -78,6 +80,12 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+
+    val mp3PickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.importAudio(it) }
+    }
 
     val allSongs by viewModel.allSongs.collectAsState()
     val isPlaying by viewModel.isAudioPlaying.collectAsState()
@@ -159,6 +167,23 @@ fun LibraryScreen(
                         ),
                         color = NeonCyan
                     )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            mp3PickerLauncher.launch(arrayOf("audio/*"))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = downloadingSongId == null
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FileDownload,
+                            contentDescription = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("MP3 İçe Aktar")
+                    }
 
                     if (!downloadMessage.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(8.dp))
