@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.audio.AudioSynthesisEngine
@@ -358,7 +359,6 @@ class MusicStudioViewModel(application: Application) :
                     duration = duration
                 )
 
-                // ÜRETİM BAŞARILI OLUR OLMAZ KÜTÜPHANEYE KAYDET.
                 db.songDao().insertSong(item)
 
                 generatedSongDatabaseId = item.id
@@ -474,7 +474,6 @@ class MusicStudioViewModel(application: Application) :
             _downloadMessage.value = "MP3 indiriliyor..."
 
             try {
-                // Önce veritabanı kaydını garantiye al.
                 val existing = db.songDao().getSongById(itemId)
 
                 val savedItem = createGeneratedSongItem(
@@ -492,7 +491,6 @@ class MusicStudioViewModel(application: Application) :
 
                 generatedSongDatabaseId = itemId
 
-                // MP3 dosyasını telefona indir.
                 val localPath = downloadMp3ToPhone(
                     url = url,
                     title = song.title
@@ -512,6 +510,100 @@ class MusicStudioViewModel(application: Application) :
             } catch (e: Exception) {
                 _downloadMessage.value =
                     "İndirme hatası: ${e.message ?: "Bilinmeyen hata"}. Şarkı kütüphanede korunuyor."
+            } finally {
+                _downloadingSongId.value = null
+            }
+        }
+    }
+
+    // IMPORT EXTERNAL MP3 INTO MUSECRAFT
+
+    fun importAudio(uri: Uri) {
+        if (_downloadingSongId.value != null) return
+
+        viewModelScope.launch {
+            val songId = UUID.randomUUID().toString()
+            var importedFile: File? = null
+
+            _downloadingSongId.value = songId
+            _downloadProgress.value = 0
+            _downloadMessage.value = "MP3 MuseCraft'a aktarılıyor..."
+
+            try {
+                val resolver = app.contentResolver
+
+                val originalName = resolver.query(
+                    uri,
+                    arrayOf(OpenableColumns.DISPLAY_NAME),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0)
+                    else null
+                } ?: "MuseCraft_Sarki.mp3"
+
+                require(originalName.endsWith(".mp3", true)) {
+                    "Lütfen MP3 formatında bir dosya seç."
+                }
+
+                val title = originalName
+                    .substringBeforeLast(".")
+                    .ifBlank { "İçe Aktarılan Şarkı" }
+
+                val musicFolder = File(app.filesDir, "imported_audio")
+
+                if (!musicFolder.exists() && !musicFolder.mkdirs()) {
+                    throw IOException("MP3 klasörü oluşturulamadı.")
+                }
+
+                val destination = File(musicFolder, "$songId.mp3")
+
+                withContext(Dispatchers.IO) {
+                    val input = resolver.openInputStream(uri)
+                        ?: throw IOException("MP3 dosyası açılamadı.")
+
+                    input.use { source ->
+                        FileOutputStream(destination).use { output ->
+                            source.copyTo(output)
+                        }
+                    }
+
+                    if (!destination.exists() || destination.length() < 1024) {
+                        throw IOException("MP3 dosyası geçersiz veya çok küçük.")
+                    }
+                }
+
+                importedFile = destination
+
+                val item = SongItem(
+                    id = songId,
+                    title = title,
+                    lyrics = "",
+                    genre = "İçe Aktarılan MP3",
+                    mood = "Harici ses kaydı",
+                    tempoBpm = 120,
+                    musicalKey = "Bilinmiyor",
+                    chordProgression = "Bilinmiyor",
+                    vocalToneName = "İçe aktarıldı",
+                    vocalGender = "UNKNOWN",
+                    isCover = false,
+                    audioUrl = null,
+                    audioFilePath = destination.absolutePath,
+                    durationSeconds = null
+                )
+
+                db.songDao().insertSong(item)
+
+                _activePlayingSong.value = item
+                _downloadProgress.value = 100
+                _downloadMessage.value =
+                    "$title MuseCraft kütüphanesine aktarıldı."
+
+            } catch (e: Exception) {
+                importedFile?.delete()
+                _downloadMessage.value =
+                    "MP3 aktarma hatası: ${e.message ?: "Bilinmeyen hata"}"
             } finally {
                 _downloadingSongId.value = null
             }
@@ -632,9 +724,7 @@ class MusicStudioViewModel(application: Application) :
             val responseCode = connection.responseCode
 
             if (responseCode !in 200..299) {
-                throw IOException(
-                    "Sunucu indirme hatası: HTTP $responseCode"
-                )
+                throw IOException("Sunucu indirme hatası: HTTP $responseCode")
             }
 
             val contentType = connection.contentType.orEmpty()
@@ -643,9 +733,7 @@ class MusicStudioViewModel(application: Application) :
                 contentType.contains("text/html", true) ||
                 contentType.contains("application/json", true)
             ) {
-                throw IOException(
-                    "Sunucu MP3 yerine HTML veya JSON gönderdi."
-                )
+                throw IOException("Sunucu MP3 yerine HTML veya JSON gönderdi.")
             }
 
             val fileName =
@@ -655,7 +743,6 @@ class MusicStudioViewModel(application: Application) :
 
             input.use { stream ->
 
-                // MP3 başlığını kontrol et.
                 stream.mark(8)
 
                 val header = ByteArray(3)
@@ -675,9 +762,7 @@ class MusicStudioViewModel(application: Application) :
                     (header[1].toInt() and 0xE0) == 0xE0
 
                 if (!hasId3 && !hasMpegFrame) {
-                    throw IOException(
-                        "İndirilen dosyanın MP3 başlığı doğrulanamadı."
-                    )
+                    throw IOException("İndirilen dosyanın MP3 başlığı doğrulanamadı.")
                 }
 
                 var totalBytes = 0L
@@ -685,22 +770,13 @@ class MusicStudioViewModel(application: Application) :
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 
                     val values = ContentValues().apply {
-                        put(
-                            MediaStore.Audio.Media.DISPLAY_NAME,
-                            fileName
-                        )
-                        put(
-                            MediaStore.Audio.Media.MIME_TYPE,
-                            "audio/mpeg"
-                        )
+                        put(MediaStore.Audio.Media.DISPLAY_NAME, fileName)
+                        put(MediaStore.Audio.Media.MIME_TYPE, "audio/mpeg")
                         put(
                             MediaStore.Audio.Media.RELATIVE_PATH,
                             "${Environment.DIRECTORY_MUSIC}/MuseCraft"
                         )
-                        put(
-                            MediaStore.Audio.Media.IS_PENDING,
-                            1
-                        )
+                        put(MediaStore.Audio.Media.IS_PENDING, 1)
                     }
 
                     mediaUri = app.contentResolver.insert(
@@ -713,9 +789,7 @@ class MusicStudioViewModel(application: Application) :
                     val output = app.contentResolver.openOutputStream(
                         mediaUri!!,
                         "w"
-                    ) ?: throw IOException(
-                        "MP3 dosyası yazılamadı."
-                    )
+                    ) ?: throw IOException("MP3 dosyası yazılamadı.")
 
                     output.use { destination ->
                         val buffer = ByteArray(8192)
@@ -732,16 +806,11 @@ class MusicStudioViewModel(application: Application) :
                     }
 
                     if (totalBytes < 1024) {
-                        throw IOException(
-                            "İndirilen MP3 dosyası çok küçük veya geçersiz."
-                        )
+                        throw IOException("İndirilen MP3 dosyası çok küçük veya geçersiz.")
                     }
 
                     val completedValues = ContentValues().apply {
-                        put(
-                            MediaStore.Audio.Media.IS_PENDING,
-                            0
-                        )
+                        put(MediaStore.Audio.Media.IS_PENDING, 0)
                     }
 
                     app.contentResolver.update(
@@ -755,19 +824,13 @@ class MusicStudioViewModel(application: Application) :
 
                 } else {
 
-                    // Android 9 ve öncesi için uygulama dış dosya alanı.
                     val musicFolder = File(
                         app.getExternalFilesDir(Environment.DIRECTORY_MUSIC),
                         "MuseCraft"
                     )
 
-                    if (
-                        !musicFolder.exists() &&
-                        !musicFolder.mkdirs()
-                    ) {
-                        throw IOException(
-                            "Müzik klasörü oluşturulamadı."
-                        )
+                    if (!musicFolder.exists() && !musicFolder.mkdirs()) {
+                        throw IOException("Müzik klasörü oluşturulamadı.")
                     }
 
                     val outputFile = File(musicFolder, fileName)
@@ -788,9 +851,7 @@ class MusicStudioViewModel(application: Application) :
                         }
 
                         if (totalBytes < 1024) {
-                            throw IOException(
-                                "İndirilen MP3 dosyası geçersiz."
-                            )
+                            throw IOException("İndirilen MP3 dosyası geçersiz.")
                         }
 
                         MediaScannerConnection.scanFile(
@@ -880,8 +941,7 @@ class MusicStudioViewModel(application: Application) :
 
     fun saveGeneratedCover() {
         val cover = _generatedCover.value ?: run {
-            _coverMessage.value =
-                "Kaydedilecek cover sözleri bulunamadı."
+            _coverMessage.value = "Kaydedilecek cover sözleri bulunamadı."
             return
         }
 
