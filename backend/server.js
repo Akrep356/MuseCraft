@@ -1058,7 +1058,8 @@ app.get("/api/bluemetal/download/:id", async (req, res) => {
 
         const status = normalizeStatus(result.status);
 
-        if (status !== "succeeded") {
+        // Başarılı üretim durumlarını kontrol et
+        if (!["succeeded", "completed", "complete"].includes(status)) {
             return res.status(409).json({
                 ok: false,
                 status: status,
