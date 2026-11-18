@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const crypto = require("crypto");
+const { Readable } = require("stream");
+const { pipeline } = require("stream/promises");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -28,7 +30,10 @@ const GEMINI_API_BASE =
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-// JSON RESPONSE READER
+// ========================================
+// GENERAL HELPERS
+// ========================================
+
 async function readJsonResponse(response) {
     const text = await response.text();
 
@@ -42,7 +47,6 @@ async function readJsonResponse(response) {
     }
 }
 
-// ERROR MESSAGE READER
 function getErrorMessage(result, fallback) {
     if (!result) return fallback;
 
@@ -61,7 +65,6 @@ function getErrorMessage(result, fallback) {
     return fallback;
 }
 
-// HTTP URL CHECK
 function isHttpUrl(value) {
     if (typeof value !== "string") return false;
 
@@ -75,7 +78,6 @@ function isHttpUrl(value) {
     }
 }
 
-// FIND AUDIO URL
 function findAudioUrl(root) {
     const preferredKeys = [
         "audioUrl",
@@ -170,7 +172,6 @@ function findAudioUrl(root) {
     return search(root, 0);
 }
 
-// FIND EROQ JOB ID
 function findJobId(result) {
     if (!result || typeof result !== "object") {
         return null;
@@ -193,17 +194,14 @@ function findJobId(result) {
         null;
 }
 
-// NORMALIZE STATUS
 function normalizeStatus(value) {
     return String(value || "unknown").toLowerCase();
 }
 
-// WAIT HELPER
 function wait(milliseconds) {
     return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
-// GEMINI RETRY STATUS CHECK
 function isRetryableStatus(status) {
     return [
         408,
@@ -215,7 +213,10 @@ function isRetryableStatus(status) {
     ].includes(status);
 }
 
-// GEMINI TEXT EXTRACTION
+// ========================================
+// GEMINI HELPERS
+// ========================================
+
 function extractGeminiText(result) {
     const candidates = result.candidates || [];
 
@@ -245,7 +246,6 @@ function extractGeminiText(result) {
     return generatedText;
 }
 
-// GEMINI REQUEST TO ONE MODEL
 async function requestGeminiModel(prompt, model) {
     const endpoint =
         `${GEMINI_API_BASE}/${model}:generateContent` +
@@ -293,7 +293,6 @@ async function requestGeminiModel(prompt, model) {
     return extractGeminiText(result);
 }
 
-// GEMINI API WITH MODEL FALLBACK
 async function callGemini(prompt) {
     if (!GEMINI_API_KEY) {
         throw new Error(
@@ -371,7 +370,6 @@ async function callGemini(prompt) {
 // BLUEMETAL HELPERS
 // ========================================
 
-// CREATE BLUEMETAL PROMPT
 function buildBlueMetalPrompt({
     prompt,
     style,
@@ -413,7 +411,6 @@ function buildBlueMetalPrompt({
     return sections.join("\n\n").trim();
 }
 
-// BLUEMETAL REQUEST
 async function blueMetalRequest(path, options = {}) {
     if (!BLUEMETAL_API_KEY) {
         throw new Error(
@@ -483,12 +480,16 @@ app.get("/", (req, res) => {
             "/api/music/status/:id",
             "/api/bluemetal/generate",
             "/api/bluemetal/status/:id",
+            "/api/bluemetal/download/:id",
             "/api/gemini/generate"
         ]
     });
 });
 
+// ========================================
 // HEALTH CHECK
+// ========================================
+
 app.get("/health", (req, res) => {
     res.json({
         ok: true,
@@ -648,7 +649,8 @@ app.post("/api/music/generate", async (req, res) => {
                     Authorization: `Bearer ${EROQ_API_KEY}`,
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify(musicRequest)
+                body: JSON.stringify(musicRequest),
+                signal: AbortSignal.timeout(120000)
             }
         );
 
@@ -735,7 +737,8 @@ app.get("/api/music/status/:id", async (req, res) => {
                 method: "GET",
                 headers: {
                     Authorization: `Bearer ${EROQ_API_KEY}`
-                }
+                },
+                signal: AbortSignal.timeout(60000)
             }
         );
 
@@ -1020,6 +1023,125 @@ app.get("/api/bluemetal/status/:id", async (req, res) => {
             requestId: error.requestId || null,
             retryAfter: error.retryAfter || null
         });
+    }
+});
+
+// ========================================
+// BLUEMETAL MP3 DOWNLOAD PROXY
+// ========================================
+
+app.get("/api/bluemetal/download/:id", async (req, res) => {
+    try {
+        if (!BLUEMETAL_API_KEY) {
+            return res.status(500).json({
+                ok: false,
+                error: "BLUEMETAL_API_KEY tanımlanmamış."
+            });
+        }
+
+        const id = req.params.id;
+
+        if (!/^gen_[a-zA-Z0-9_-]+$/.test(id)) {
+            return res.status(400).json({
+                ok: false,
+                error: "Geçersiz BlueMetal üretim ID."
+            });
+        }
+
+        // Güncel üretim durumunu ve MP3 URL'sini al
+        const { result } = await blueMetalRequest(
+            `/music/generations/${encodeURIComponent(id)}`,
+            {
+                method: "GET"
+            }
+        );
+
+        const status = normalizeStatus(result.status);
+
+        if (status !== "succeeded") {
+            return res.status(409).json({
+                ok: false,
+                status: status,
+                error: "MP3 henüz indirilmeye hazır değil."
+            });
+        }
+
+        const audioUrl = result.audio?.url;
+
+        if (!isHttpUrl(audioUrl)) {
+            return res.status(502).json({
+                ok: false,
+                error: "BlueMetal geçerli MP3 bağlantısı döndürmedi."
+            });
+        }
+
+        const parsedUrl = new URL(audioUrl);
+
+        if (
+            parsedUrl.protocol !== "https:" ||
+            !parsedUrl.hostname.endsWith(".r2.cloudflarestorage.com")
+        ) {
+            return res.status(502).json({
+                ok: false,
+                error: "Beklenmeyen MP3 depolama adresi."
+            });
+        }
+
+        console.log("BLUEMETAL DOWNLOAD START:", id);
+
+        // MP3 dosyasını doğrudan Render üzerinden aktar
+        const audioResponse = await fetch(audioUrl, {
+            method: "GET",
+            signal: AbortSignal.timeout(120000)
+        });
+
+        if (!audioResponse.ok || !audioResponse.body) {
+            console.error("AUDIO DOWNLOAD ERROR:", {
+                id,
+                status: audioResponse.status
+            });
+
+            return res.status(502).json({
+                ok: false,
+                error: "MP3 dosyası BlueMetal'den alınamadı."
+            });
+        }
+
+        res.setHeader("Content-Type", "audio/mpeg");
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="MuseCraft_${id}.mp3"`
+        );
+
+        res.setHeader("Cache-Control", "no-store");
+
+        const contentLength =
+            audioResponse.headers.get("content-length");
+
+        if (contentLength) {
+            res.setHeader("Content-Length", contentLength);
+        }
+
+        await pipeline(
+            Readable.fromWeb(audioResponse.body),
+            res
+        );
+
+        console.log("BLUEMETAL DOWNLOAD SUCCESS:", id);
+
+    } catch (error) {
+        console.error("BLUEMETAL DOWNLOAD ERROR:", error);
+
+        if (!res.headersSent) {
+            res.status(500).json({
+                ok: false,
+                error: error.message ||
+                    "MP3 indirme işlemi başarısız."
+            });
+        } else {
+            res.destroy(error);
+        }
     }
 });
 
