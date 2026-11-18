@@ -1,11 +1,15 @@
 const express = require("express");
 const cors = require("cors");
+const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 const EROQ_API_KEY = process.env.EROQ_API_KEY;
 const EROQ_API_URL = "https://eroq.ai/v1";
+
+const BLUEMETAL_API_KEY = process.env.BLUEMETAL_API_KEY;
+const BLUEMETAL_API_URL = "https://api.bluemetal.ai/v1";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -141,9 +145,7 @@ function findAudioUrl(root) {
         ];
 
         for (const key of nestedKeys) {
-            if (
-                Object.prototype.hasOwnProperty.call(value, key)
-            ) {
+            if (Object.prototype.hasOwnProperty.call(value, key)) {
                 const found = search(value[key], depth + 1);
 
                 if (found) return found;
@@ -365,20 +367,122 @@ async function callGemini(prompt) {
     throw finalError;
 }
 
+// ========================================
+// BLUEMETAL HELPERS
+// ========================================
+
+// CREATE BLUEMETAL PROMPT
+function buildBlueMetalPrompt({
+    prompt,
+    style,
+    lyrics,
+    title,
+    instrumental
+}) {
+    const sections = [];
+
+    if (title) {
+        sections.push("Song title: " + title);
+    }
+
+    if (style) {
+        sections.push("Musical style: " + style);
+    }
+
+    if (prompt) {
+        sections.push("Musical direction: " + prompt);
+    }
+
+    if (instrumental) {
+        sections.push(
+            "Create an instrumental track without vocals or singing."
+        );
+    } else {
+        sections.push(
+            "Create a complete song with vocals. " +
+            "Use Turkish pronunciation and Turkish lyrics."
+        );
+    }
+
+    if (lyrics && !instrumental) {
+        sections.push(
+            "Use these exact lyrics:\n" + lyrics
+        );
+    }
+
+    return sections.join("\n\n").trim();
+}
+
+// BLUEMETAL REQUEST
+async function blueMetalRequest(path, options = {}) {
+    if (!BLUEMETAL_API_KEY) {
+        throw new Error(
+            "BLUEMETAL_API_KEY Render ortamında tanımlanmamış."
+        );
+    }
+
+    const response = await fetch(
+        `${BLUEMETAL_API_URL}${path}`,
+        {
+            ...options,
+            headers: {
+                Authorization: `Bearer ${BLUEMETAL_API_KEY}`,
+                ...(options.headers || {})
+            },
+            signal: AbortSignal.timeout(60000)
+        }
+    );
+
+    const result = await readJsonResponse(response);
+
+    if (!response.ok) {
+        const error = new Error(
+            getErrorMessage(
+                result,
+                `BlueMetal API hatası: HTTP ${response.status}`
+            )
+        );
+
+        error.status = response.status;
+        error.requestId =
+            response.headers.get("x-request-id");
+
+        error.retryAfter =
+            response.headers.get("retry-after");
+
+        throw error;
+    }
+
+    return {
+        result,
+        requestId: response.headers.get("x-request-id")
+    };
+}
+
+// ========================================
 // SERVER INFORMATION
+// ========================================
+
 app.get("/", (req, res) => {
     res.json({
         app: "MuseCraft Music Server",
         status: "online",
+
         engines: {
-            music: "eroq-music-one",
+            music: [
+                "eroq-music-one",
+                "bluemetal"
+            ],
             textAI: GEMINI_MODEL,
             fallbackModels: GEMINI_MODELS
         },
+
         endpoints: [
             "/health",
             "/api/music/generate",
             "/api/music/status/:id",
+            "/api/bluemetal/generate",
+            "/api/bluemetal/status/:id",
             "/api/gemini/generate"
         ]
     });
@@ -390,12 +494,16 @@ app.get("/health", (req, res) => {
         ok: true,
         server: "MuseCraft",
         eroqConfigured: Boolean(EROQ_API_KEY),
+        blueMetalConfigured: Boolean(BLUEMETAL_API_KEY),
         geminiConfigured: Boolean(GEMINI_API_KEY),
         geminiModels: GEMINI_MODELS
     });
 });
 
+// ========================================
 // GEMINI GENERATION
+// ========================================
+
 app.post("/api/gemini/generate", async (req, res) => {
     try {
         if (!GEMINI_API_KEY) {
@@ -454,7 +562,10 @@ app.post("/api/gemini/generate", async (req, res) => {
     }
 });
 
+// ========================================
 // EROQ MUSIC GENERATION
+// ========================================
+
 app.post("/api/music/generate", async (req, res) => {
     try {
         if (!EROQ_API_KEY) {
@@ -571,10 +682,6 @@ app.post("/api/music/generate", async (req, res) => {
         const audioUrl = findAudioUrl(result);
 
         console.log("EROQ JOB CREATED:", jobId);
-        console.log(
-            "EROQ INITIAL AUDIO URL:",
-            audioUrl ? "FOUND" : "NOT YET AVAILABLE"
-        );
 
         return res.status(202).json({
             ok: true,
@@ -592,14 +699,18 @@ app.post("/api/music/generate", async (req, res) => {
     } catch (error) {
         console.error("MUSIC GENERATION ERROR:", error);
 
-        return res.status(500).json({
+        return res.status(error.status || 500).json({
             ok: false,
-            error: "Müzik sunucusunda beklenmeyen hata."
+            error: error.message ||
+                "Müzik sunucusunda beklenmeyen hata."
         });
     }
 });
 
+// ========================================
 // EROQ MUSIC STATUS
+// ========================================
+
 app.get("/api/music/status/:id", async (req, res) => {
     try {
         if (!EROQ_API_KEY) {
@@ -675,25 +786,262 @@ app.get("/api/music/status/:id", async (req, res) => {
     } catch (error) {
         console.error("MUSIC STATUS ERROR:", error);
 
-        return res.status(500).json({
+        return res.status(error.status || 500).json({
             ok: false,
-            error: "Müzik durumu kontrol edilemedi."
+            error: error.message ||
+                "Müzik durumu kontrol edilemedi."
         });
     }
 });
 
+// ========================================
+// BLUEMETAL MUSIC GENERATION
+// ========================================
+
+app.post("/api/bluemetal/generate", async (req, res) => {
+    try {
+        if (!BLUEMETAL_API_KEY) {
+            return res.status(500).json({
+                ok: false,
+                error: "BLUEMETAL_API_KEY Render ortamında tanımlanmamış."
+            });
+        }
+
+        const {
+            prompt,
+            style,
+            lyrics,
+            title,
+            instrumental = false,
+            idempotencyKey
+        } = req.body || {};
+
+        const cleanPrompt = String(prompt || "").trim();
+        const cleanStyle = String(style || "").trim();
+        const cleanLyrics = String(lyrics || "").trim();
+        const cleanTitle = String(title || "").trim();
+        const isInstrumental = Boolean(instrumental);
+
+        if (
+            !cleanPrompt &&
+            !cleanStyle &&
+            !cleanLyrics
+        ) {
+            return res.status(400).json({
+                ok: false,
+                error: "BlueMetal için müzik açıklaması veya şarkı sözleri gerekli."
+            });
+        }
+
+        if (
+            cleanPrompt.length > 1500 ||
+            cleanStyle.length > 600 ||
+            cleanLyrics.length > 3000 ||
+            cleanTitle.length > 100
+        ) {
+            return res.status(400).json({
+                ok: false,
+                error: "Gönderilen metinlerden biri izin verilen uzunluğu aşıyor."
+            });
+        }
+
+        const finalPrompt = buildBlueMetalPrompt({
+            prompt: cleanPrompt,
+            style: cleanStyle,
+            lyrics: cleanLyrics,
+            title: cleanTitle,
+            instrumental: isInstrumental
+        });
+
+        if (finalPrompt.length > 2000) {
+            return res.status(400).json({
+                ok: false,
+                error:
+                    "BlueMetal prompt sınırı 2000 karakter. " +
+                    "Şarkı sözlerini veya müzik açıklamasını kısaltın.",
+                promptLength: finalPrompt.length,
+                maximumLength: 2000
+            });
+        }
+
+        const requestKey =
+            String(idempotencyKey || "").trim() ||
+            crypto.randomUUID();
+
+        if (
+            requestKey.length > 200 ||
+            !/^[a-zA-Z0-9_-]+$/.test(requestKey)
+        ) {
+            return res.status(400).json({
+                ok: false,
+                error: "Geçersiz Idempotency-Key."
+            });
+        }
+
+        const musicRequest = {
+            prompt: finalPrompt,
+            format: "mp3",
+            mode: "async"
+        };
+
+        console.log("BLUEMETAL MUSIC REQUEST:", {
+            promptLength: finalPrompt.length,
+            instrumental: isInstrumental
+        });
+
+        const { result, requestId } = await blueMetalRequest(
+            "/music/generations",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Idempotency-Key": requestKey
+                },
+                body: JSON.stringify(musicRequest)
+            }
+        );
+
+        const generationId = result.id;
+
+        if (!generationId) {
+            console.error("BLUEMETAL ID MISSING:", result);
+
+            return res.status(502).json({
+                ok: false,
+                error: "BlueMetal yanıtında üretim kimliği bulunamadı."
+            });
+        }
+
+        const audioUrl = result.audio?.url || null;
+
+        console.log("BLUEMETAL JOB CREATED:", {
+            id: generationId,
+            status: result.status,
+            requestId: requestId
+        });
+
+        return res.status(202).json({
+            ok: true,
+            provider: "bluemetal",
+            id: String(generationId),
+            status: normalizeStatus(result.status),
+            queuePosition: result.queue_position || null,
+            audioUrl: audioUrl,
+            audio: result.audio || null,
+            usage: result.usage || null,
+            title: cleanTitle || null,
+            promptLength: finalPrompt.length,
+            idempotencyKey: requestKey,
+            requestId: requestId
+        });
+
+    } catch (error) {
+        console.error("BLUEMETAL GENERATION ERROR:", {
+            status: error.status || null,
+            message: error.message,
+            requestId: error.requestId || null
+        });
+
+        return res.status(error.status || 500).json({
+            ok: false,
+            provider: "bluemetal",
+            error: error.message ||
+                "BlueMetal müzik üretiminde beklenmeyen hata.",
+            requestId: error.requestId || null,
+            retryAfter: error.retryAfter || null
+        });
+    }
+});
+
+// ========================================
+// BLUEMETAL MUSIC STATUS
+// ========================================
+
+app.get("/api/bluemetal/status/:id", async (req, res) => {
+    try {
+        if (!BLUEMETAL_API_KEY) {
+            return res.status(500).json({
+                ok: false,
+                error: "BLUEMETAL_API_KEY Render ortamında tanımlanmamış."
+            });
+        }
+
+        const id = req.params.id;
+
+        if (!/^gen_[a-zA-Z0-9_-]+$/.test(id)) {
+            return res.status(400).json({
+                ok: false,
+                error: "Geçersiz BlueMetal üretim ID."
+            });
+        }
+
+        const { result, requestId } = await blueMetalRequest(
+            `/music/generations/${encodeURIComponent(id)}`,
+            {
+                method: "GET"
+            }
+        );
+
+        const status = normalizeStatus(result.status);
+        const audioUrl = result.audio?.url || null;
+
+        console.log("BLUEMETAL STATUS:", {
+            id: id,
+            status: status,
+            audioUrlFound: Boolean(audioUrl),
+            requestId: requestId
+        });
+
+        return res.json({
+            ok: true,
+            provider: "bluemetal",
+            id: String(result.id || id),
+            status: status,
+            queuePosition: result.queue_position || null,
+            audioUrl: audioUrl,
+            audio: result.audio || null,
+            usage: result.usage || null,
+            error: result.error || null,
+            requestId: requestId
+        });
+
+    } catch (error) {
+        console.error("BLUEMETAL STATUS ERROR:", {
+            status: error.status || null,
+            message: error.message,
+            requestId: error.requestId || null
+        });
+
+        return res.status(error.status || 500).json({
+            ok: false,
+            provider: "bluemetal",
+            error: error.message ||
+                "BlueMetal üretim durumu alınamadı.",
+            requestId: error.requestId || null,
+            retryAfter: error.retryAfter || null
+        });
+    }
+});
+
+// ========================================
 // START SERVER
+// ========================================
+
 app.listen(PORT, "0.0.0.0", () => {
     console.log(
         "MuseCraft Music Server listening on port " + PORT
     );
 
-    console.log("Eroq Music One integration ready.");
+    console.log("Eroq Music One integration:", Boolean(EROQ_API_KEY));
+    console.log("BlueMetal integration:", Boolean(BLUEMETAL_API_KEY));
+
     console.log("Gemini primary model:", GEMINI_MODEL);
+
     console.log(
         "Gemini fallback models:",
         GEMINI_MODELS.join(", ")
     );
+
     console.log(
         "Gemini integration ready:",
         Boolean(GEMINI_API_KEY)
