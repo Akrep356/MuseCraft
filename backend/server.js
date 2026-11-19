@@ -12,6 +12,7 @@ const EROQ_API_URL = "https://eroq.ai/v1";
 
 const BLUEMETAL_API_KEY = process.env.BLUEMETAL_API_KEY;
 const BLUEMETAL_API_URL = "https://api.bluemetal.ai/v1";
+const BLUEMETAL_MAX_PROMPT_LENGTH = 2000;
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -26,8 +27,6 @@ const GEMINI_MODEL = GEMINI_MODELS[0];
 
 const GEMINI_API_BASE =
     "https://generativelanguage.googleapis.com/v1beta/models";
-
-const BLUEMETAL_MAX_PROMPT_LENGTH = 2000;
 
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
@@ -72,7 +71,6 @@ function isHttpUrl(value) {
 
     try {
         const parsed = new URL(value);
-
         return parsed.protocol === "https:" ||
             parsed.protocol === "http:";
     } catch {
@@ -120,7 +118,6 @@ function findAudioUrl(root) {
                 const found = search(item, depth + 1);
                 if (found) return found;
             }
-
             return null;
         }
 
@@ -134,24 +131,14 @@ function findAudioUrl(root) {
         }
 
         const nestedKeys = [
-            "data",
-            "result",
-            "results",
-            "output",
-            "outputs",
-            "audio",
-            "track",
-            "tracks",
-            "file",
-            "files",
-            "job",
-            "jobs"
+            "data", "result", "results", "output", "outputs",
+            "audio", "track", "tracks", "file", "files",
+            "job", "jobs"
         ];
 
         for (const key of nestedKeys) {
             if (Object.prototype.hasOwnProperty.call(value, key)) {
                 const found = search(value[key], depth + 1);
-
                 if (found) return found;
             }
         }
@@ -163,7 +150,6 @@ function findAudioUrl(root) {
 
             if (child && typeof child === "object") {
                 const found = search(child, depth + 1);
-
                 if (found) return found;
             }
         }
@@ -175,25 +161,17 @@ function findAudioUrl(root) {
 }
 
 function findJobId(result) {
-    if (!result || typeof result !== "object") {
-        return null;
-    }
+    if (!result || typeof result !== "object") return null;
 
     if (Array.isArray(result.jobs) && result.jobs.length > 0) {
         const job = result.jobs[0];
 
         if (job && typeof job === "object") {
-            return job.id ||
-                job.job_id ||
-                job.jobId ||
-                null;
+            return job.id || job.job_id || job.jobId || null;
         }
     }
 
-    return result.id ||
-        result.job_id ||
-        result.jobId ||
-        null;
+    return result.id || result.job_id || result.jobId || null;
 }
 
 function normalizeStatus(value) {
@@ -205,14 +183,7 @@ function wait(milliseconds) {
 }
 
 function isRetryableStatus(status) {
-    return [
-        408,
-        429,
-        500,
-        502,
-        503,
-        504
-    ].includes(status);
+    return [408, 429, 500, 502, 503, 504].includes(status);
 }
 
 // ========================================
@@ -223,9 +194,7 @@ function extractGeminiText(result) {
     const candidates = result.candidates || [];
 
     if (!candidates.length) {
-        throw new Error(
-            "Gemini yanıtında içerik bulunamadı."
-        );
+        throw new Error("Gemini yanıtında içerik bulunamadı.");
     }
 
     const firstCandidate = candidates[0];
@@ -239,7 +208,6 @@ function extractGeminiText(result) {
 
     if (!generatedText) {
         const reason = firstCandidate.finishReason || "Bilinmiyor";
-
         throw new Error(
             "Gemini boş yanıt döndürdü. Bitiş nedeni: " + reason
         );
@@ -259,16 +227,10 @@ async function requestGeminiModel(prompt, model) {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            contents: [
-                {
-                    role: "user",
-                    parts: [
-                        {
-                            text: prompt
-                        }
-                    ]
-                }
-            ],
+            contents: [{
+                role: "user",
+                parts: [{ text: prompt }]
+            }],
             generationConfig: {
                 temperature: 0.7,
                 topP: 0.95,
@@ -287,7 +249,6 @@ async function requestGeminiModel(prompt, model) {
                 `Gemini API hatası: HTTP ${response.status}`
             )
         );
-
         error.status = response.status;
         throw error;
     }
@@ -310,7 +271,7 @@ async function callGemini(prompt) {
         console.log("GEMINI ATTEMPT:", {
             attempt: index + 1,
             totalModels: GEMINI_MODELS.length,
-            model: model
+            model
         });
 
         try {
@@ -318,20 +279,20 @@ async function callGemini(prompt) {
                 await requestGeminiModel(prompt, model);
 
             console.log("GEMINI SUCCESS:", {
-                model: model,
+                model,
                 responseLength: generatedText.length
             });
 
             return {
                 text: generatedText,
-                model: model
+                model
             };
 
         } catch (error) {
             lastError = error;
 
             console.error("GEMINI MODEL ERROR:", {
-                model: model,
+                model,
                 status: error.status || null,
                 name: error.name,
                 message: error.message
@@ -343,9 +304,7 @@ async function callGemini(prompt) {
                 error.name === "AbortError" ||
                 error.name === "TypeError";
 
-            if (!retryable) {
-                throw error;
-            }
+            if (!retryable) throw error;
 
             if (index < GEMINI_MODELS.length - 1) {
                 console.log("GEMINI FALLBACK:", {
@@ -364,7 +323,6 @@ async function callGemini(prompt) {
     );
 
     finalError.status = lastError?.status || 503;
-
     throw finalError;
 }
 
@@ -392,46 +350,45 @@ function buildBlueMetalPrompt({
         ? "Lyrics:\n" + cleanLyrics
         : "";
 
-    const baseParts = [
-        instruction,
-        lyricsBlock
-    ].filter(Boolean);
-
+    const baseParts = [instruction, lyricsBlock].filter(Boolean);
     const basePrompt = baseParts.join("\n\n");
 
     if (basePrompt.length > BLUEMETAL_MAX_PROMPT_LENGTH) {
-        const availableLyricsLength =
+        const availableLyricsLength = Math.max(
+            0,
             BLUEMETAL_MAX_PROMPT_LENGTH -
             instruction.length -
-            "\n\nLyrics:\n".length;
+            "\n\nLyrics:\n".length
+        );
 
         const error = new Error(
-            "Şarkı sözleri BlueMetal sınırına sığmıyor. " +
-            "Sözlerin mevcut uzunluğu " +
-            cleanLyrics.length +
-            " karakter. Açıklama ve başlık eklenmeden " +
-            "kullanılabilecek yaklaşık söz alanı " +
-            Math.max(0, availableLyricsLength) +
-            " karakter."
+            "Şarkı sözleri BlueMetal'in 2000 karakter sınırına sığmıyor. " +
+            "Mevcut söz uzunluğu: " + cleanLyrics.length +
+            " karakter. Bu üretimde kullanılabilecek yaklaşık söz alanı: " +
+            availableLyricsLength +
+            " karakter. Şarkı sözlerini kısaltmak gerekiyor."
         );
 
         error.code = "BLUEMETAL_LYRICS_TOO_LONG";
         error.status = 400;
-
         throw error;
     }
 
+    // Önce sözleri ve vokal talimatını koruyoruz.
+    // Kalan karakter alanını metadata için kullanıyoruz.
+    // İki satır boşluğu da hesaba katılır.
+
+    const finalParts = [basePrompt];
     let remaining =
         BLUEMETAL_MAX_PROMPT_LENGTH - basePrompt.length;
-
-    const metadata = [];
 
     function addMetadata(label, value) {
         if (!value || remaining <= 0) return;
 
-        const fullLine = `${label}: ${value}`;
-        const separator = metadata.length > 0 ? "\n" : "";
-        const available = remaining - separator.length - label.length - 2;
+        const separator = "\n\n";
+        const prefix = label + ": ";
+        const available =
+            remaining - separator.length - prefix.length;
 
         if (available <= 0) return;
 
@@ -439,28 +396,24 @@ function buildBlueMetalPrompt({
 
         if (!shortenedValue) return;
 
-        const line = `${label}: ${shortenedValue}`;
+        const line = prefix + shortenedValue;
+        finalParts.push(line);
 
-        metadata.push(line);
         remaining -= separator.length + line.length;
     }
 
-    // Öncelik sırası: müzik tarzı, açıklama, başlık.
-    // Şarkı sözleri kesilmez.
+    // Başlık, tarz ve açıklama sözlerden sonra eklenir.
+    // Sözlerin kendisi hiçbir zaman otomatik kesilmez.
 
+    addMetadata("Title", cleanTitle);
     addMetadata("Style", cleanStyle);
     addMetadata("Direction", cleanPrompt);
-    addMetadata("Title", cleanTitle);
 
-    const metadataText = metadata.join("\n");
-
-    const finalPrompt = metadataText
-        ? `${metadataText}\n\n${basePrompt}`
-        : basePrompt;
+    const finalPrompt = finalParts.join("\n\n");
 
     if (finalPrompt.length > BLUEMETAL_MAX_PROMPT_LENGTH) {
         throw new Error(
-            "BlueMetal prompt uzunluğu güvenli sınırı aştı."
+            "BlueMetal prompt sınırı aşıldı. Metin uzunlukları kontrol edilmeli."
         );
     }
 
@@ -501,11 +454,8 @@ async function blueMetalRequest(path, options = {}) {
         );
 
         error.status = response.status;
-        error.requestId =
-            response.headers.get("x-request-id");
-
-        error.retryAfter =
-            response.headers.get("retry-after");
+        error.requestId = response.headers.get("x-request-id");
+        error.retryAfter = response.headers.get("retry-after");
 
         throw error;
     }
@@ -524,16 +474,11 @@ app.get("/", (req, res) => {
     res.json({
         app: "MuseCraft Music Server",
         status: "online",
-
         engines: {
-            music: [
-                "eroq-music-one",
-                "bluemetal"
-            ],
+            music: ["eroq-music-one", "bluemetal"],
             textAI: GEMINI_MODEL,
             fallbackModels: GEMINI_MODELS
         },
-
         endpoints: [
             "/health",
             "/api/music/generate",
@@ -574,9 +519,7 @@ app.post("/api/gemini/generate", async (req, res) => {
             });
         }
 
-        const prompt = String(
-            req.body?.prompt || ""
-        ).trim();
+        const prompt = String(req.body?.prompt || "").trim();
 
         if (!prompt) {
             return res.status(400).json({
@@ -613,9 +556,7 @@ app.post("/api/gemini/generate", async (req, res) => {
     } catch (error) {
         console.error("GEMINI GENERATION ERROR:", error);
 
-        return res.status(
-            error.status || 500
-        ).json({
+        return res.status(error.status || 500).json({
             ok: false,
             error: error.message ||
                 "Gemini üretiminde beklenmeyen hata."
@@ -750,7 +691,7 @@ app.post("/api/music/generate", async (req, res) => {
             status: normalizeStatus(result.status || "processing"),
             id: String(jobId),
             jobs: Array.isArray(result.jobs) ? result.jobs : [],
-            audioUrl: audioUrl,
+            audioUrl,
             title: result.title || cleanTitle || null,
             lyrics: result.lyrics || cleanLyrics || null,
             style: result.style || cleanStyle || null,
@@ -829,19 +770,19 @@ app.get("/api/music/status/:id", async (req, res) => {
 
         console.log("EROQ STATUS:", {
             id: responseId,
-            status: status,
+            status,
             audioUrlFound: Boolean(audioUrl)
         });
 
         return res.json({
             ok: true,
             id: String(responseId),
-            status: status,
+            status,
             title: result.title || result.data?.title || null,
             style: result.style || result.data?.style || null,
             lyrics: result.lyrics || result.data?.lyrics || null,
             seconds: result.seconds || result.data?.seconds || null,
-            audioUrl: audioUrl,
+            audioUrl,
             data: result.data || null,
             error: result.error || null
         });
@@ -885,11 +826,7 @@ app.post("/api/bluemetal/generate", async (req, res) => {
         const cleanTitle = String(title || "").trim();
         const isInstrumental = Boolean(instrumental);
 
-        if (
-            !cleanPrompt &&
-            !cleanStyle &&
-            !cleanLyrics
-        ) {
+        if (!cleanPrompt && !cleanStyle && !cleanLyrics) {
             return res.status(400).json({
                 ok: false,
                 error: "BlueMetal için müzik açıklaması veya şarkı sözleri gerekli."
@@ -918,9 +855,17 @@ app.post("/api/bluemetal/generate", async (req, res) => {
                 title: cleanTitle,
                 instrumental: isInstrumental
             });
+
         } catch (promptError) {
+            console.error("BLUEMETAL PROMPT ERROR:", {
+                code: promptError.code || null,
+                message: promptError.message,
+                lyricsLength: cleanLyrics.length
+            });
+
             return res.status(promptError.status || 400).json({
                 ok: false,
+                provider: "bluemetal",
                 error: promptError.message,
                 code: promptError.code || "BLUEMETAL_PROMPT_ERROR",
                 lyricsLength: cleanLyrics.length,
@@ -983,7 +928,7 @@ app.post("/api/bluemetal/generate", async (req, res) => {
         console.log("BLUEMETAL JOB CREATED:", {
             id: generationId,
             status: result.status,
-            requestId: requestId
+            requestId
         });
 
         return res.status(202).json({
@@ -992,13 +937,13 @@ app.post("/api/bluemetal/generate", async (req, res) => {
             id: String(generationId),
             status: normalizeStatus(result.status),
             queuePosition: result.queue_position || null,
-            audioUrl: audioUrl,
+            audioUrl,
             audio: result.audio || null,
             usage: result.usage || null,
             title: cleanTitle || null,
             promptLength: finalPrompt.length,
             idempotencyKey: requestKey,
-            requestId: requestId
+            requestId
         });
 
     } catch (error) {
@@ -1043,32 +988,30 @@ app.get("/api/bluemetal/status/:id", async (req, res) => {
 
         const { result, requestId } = await blueMetalRequest(
             `/music/generations/${encodeURIComponent(id)}`,
-            {
-                method: "GET"
-            }
+            { method: "GET" }
         );
 
         const status = normalizeStatus(result.status);
         const audioUrl = result.audio?.url || null;
 
         console.log("BLUEMETAL STATUS:", {
-            id: id,
-            status: status,
+            id,
+            status,
             audioUrlFound: Boolean(audioUrl),
-            requestId: requestId
+            requestId
         });
 
         return res.json({
             ok: true,
             provider: "bluemetal",
             id: String(result.id || id),
-            status: status,
+            status,
             queuePosition: result.queue_position || null,
-            audioUrl: audioUrl,
+            audioUrl,
             audio: result.audio || null,
             usage: result.usage || null,
             error: result.error || null,
-            requestId: requestId
+            requestId
         });
 
     } catch (error) {
@@ -1113,9 +1056,7 @@ app.get("/api/bluemetal/download/:id", async (req, res) => {
 
         const { result } = await blueMetalRequest(
             `/music/generations/${encodeURIComponent(id)}`,
-            {
-                method: "GET"
-            }
+            { method: "GET" }
         );
 
         const status = normalizeStatus(result.status);
@@ -1123,7 +1064,7 @@ app.get("/api/bluemetal/download/:id", async (req, res) => {
         if (!["succeeded", "completed", "complete"].includes(status)) {
             return res.status(409).json({
                 ok: false,
-                status: status,
+                status,
                 error: "MP3 henüz indirilmeye hazır değil."
             });
         }
@@ -1215,8 +1156,15 @@ app.listen(PORT, "0.0.0.0", () => {
         "MuseCraft Music Server listening on port " + PORT
     );
 
-    console.log("Eroq Music One integration:", Boolean(EROQ_API_KEY));
-    console.log("BlueMetal integration:", Boolean(BLUEMETAL_API_KEY));
+    console.log(
+        "Eroq Music One integration:",
+        Boolean(EROQ_API_KEY)
+    );
+
+    console.log(
+        "BlueMetal integration:",
+        Boolean(BLUEMETAL_API_KEY)
+    );
 
     console.log("Gemini primary model:", GEMINI_MODEL);
 
@@ -1228,5 +1176,10 @@ app.listen(PORT, "0.0.0.0", () => {
     console.log(
         "Gemini integration ready:",
         Boolean(GEMINI_API_KEY)
+    );
+
+    console.log(
+        "BlueMetal maximum prompt length:",
+        BLUEMETAL_MAX_PROMPT_LENGTH
     );
 });
