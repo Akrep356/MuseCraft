@@ -1,4 +1,3 @@
-
 package com.example.ui.screens
 
 import androidx.compose.foundation.Image
@@ -69,6 +68,7 @@ import com.example.ui.theme.StudioSurfaceVariant
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import com.example.viewmodel.MusicEngine
 import com.example.viewmodel.MusicStudioViewModel
 
 @Composable
@@ -86,6 +86,8 @@ fun ComposeScreen(
     val generatedResult by viewModel.generatedSong.collectAsState()
     val generatedAudioUrl by viewModel.generatedSongAudioUrl.collectAsState()
     val generationMessage by viewModel.generationMessage.collectAsState()
+
+    val selectedMusicEngine by viewModel.selectedMusicEngine.collectAsState()
 
     val isPlaying by viewModel.isAudioPlaying.collectAsState()
     val isPreparing by viewModel.isAudioPreparing.collectAsState()
@@ -193,6 +195,7 @@ fun ComposeScreen(
         }
 
         // SONG THEME
+
         item {
             Card(
                 modifier = Modifier
@@ -278,6 +281,7 @@ fun ComposeScreen(
         }
 
         // GENRE
+
         item {
             Column {
                 Text(
@@ -305,6 +309,7 @@ fun ComposeScreen(
         }
 
         // VOCAL
+
         item {
             VocalToneSelectorCard(
                 selectedTone = selectedVocal,
@@ -318,6 +323,7 @@ fun ComposeScreen(
         }
 
         // USER VOICE
+
         item {
             val hasRecordedUserVoice by
                 viewModel.voiceRecorder.hasRecording.collectAsState()
@@ -453,6 +459,7 @@ fun ComposeScreen(
         }
 
         // BPM AND KEY
+
         item {
             Card(
                 modifier = Modifier
@@ -563,6 +570,7 @@ fun ComposeScreen(
         }
 
         // STEP 1: GEMINI LYRICS GENERATION
+
         item {
             Button(
                 onClick = {
@@ -636,6 +644,7 @@ fun ComposeScreen(
         }
 
         // GENERATION MESSAGE
+
         if (generationMessage.isNotBlank()) {
             item {
                 Text(
@@ -648,6 +657,7 @@ fun ComposeScreen(
         }
 
         // GENERATED SONG
+
         if (generatedResult != null) {
             val song = generatedResult!!
 
@@ -689,7 +699,142 @@ fun ComposeScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // STEP 2: EROQ REAL MUSIC GENERATION
+                        // MUSIC ENGINE SELECTOR
+
+                        Text(
+                            text = "Müzik Üretim Motoru",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = TextPrimary
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    viewModel.selectMusicEngine(
+                                        MusicEngine.BLUEMETAL
+                                    )
+                                },
+                                enabled = !isGenerating,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("select_bluemetal_engine"),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor =
+                                        if (selectedMusicEngine == MusicEngine.BLUEMETAL) {
+                                            NeonCyan
+                                        } else {
+                                            StudioSurfaceVariant
+                                        },
+                                    contentColor =
+                                        if (selectedMusicEngine == MusicEngine.BLUEMETAL) {
+                                            Color.Black
+                                        } else {
+                                            TextPrimary
+                                        },
+                                    disabledContainerColor =
+                                        if (selectedMusicEngine == MusicEngine.BLUEMETAL) {
+                                            NeonCyan.copy(alpha = 0.5f)
+                                        } else {
+                                            StudioSurfaceVariant.copy(alpha = 0.5f)
+                                        }
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(
+                                    horizontal = 6.dp,
+                                    vertical = 8.dp
+                                )
+                            ) {
+                                Text(
+                                    text = if (
+                                        selectedMusicEngine == MusicEngine.BLUEMETAL
+                                    ) {
+                                        "✓ BlueMetal"
+                                    } else {
+                                        "BlueMetal"
+                                    },
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+
+                            Button(
+                                onClick = {
+                                    viewModel.selectMusicEngine(
+                                        MusicEngine.EROQ
+                                    )
+                                },
+                                enabled = !isGenerating,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("select_eroq_engine"),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor =
+                                        if (selectedMusicEngine == MusicEngine.EROQ) {
+                                            NeonMagenta
+                                        } else {
+                                            StudioSurfaceVariant
+                                        },
+                                    contentColor = Color.White,
+                                    disabledContainerColor =
+                                        if (selectedMusicEngine == MusicEngine.EROQ) {
+                                            NeonMagenta.copy(alpha = 0.5f)
+                                        } else {
+                                            StudioSurfaceVariant.copy(alpha = 0.5f)
+                                        }
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(
+                                    horizontal = 6.dp,
+                                    vertical = 8.dp
+                                )
+                            ) {
+                                Text(
+                                    text = if (
+                                        selectedMusicEngine == MusicEngine.EROQ
+                                    ) {
+                                        "✓ Eroq Music One"
+                                    } else {
+                                        "Eroq Music One"
+                                    },
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = when (selectedMusicEngine) {
+                                MusicEngine.BLUEMETAL ->
+                                    "Seçili motor: BlueMetal. Varsayılan üretim motoru."
+
+                                MusicEngine.EROQ ->
+                                    "Seçili motor: Eroq Music One. Yedek motoru manuel olarak seçtin."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NeonCyan
+                        )
+
+                        Text(
+                            text = "Bir motor hata verirse diğer motora otomatik geçiş yapılmaz.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // STEP 2: REAL MUSIC GENERATION
+
                         Button(
                             onClick = {
                                 viewModel.generateRealSong()
@@ -729,7 +874,7 @@ fun ComposeScreen(
                                     if (generatedAudioUrl != null) {
                                         "GERÇEK MÜZİK HAZIR"
                                     } else {
-                                        "2. GERÇEK MÜZİĞİ ÜRET (EROQ)"
+                                        "2. GERÇEK MÜZİĞİ ÜRET (${selectedMusicEngine.title.uppercase()})"
                                     },
                                     fontWeight = FontWeight.Bold
                                 )
@@ -739,6 +884,7 @@ fun ComposeScreen(
                         Spacer(modifier = Modifier.height(14.dp))
 
                         // REAL MP3 PLAY BUTTON
+
                         Button(
                             onClick = {
                                 if (isPlaying) {
@@ -796,7 +942,7 @@ fun ComposeScreen(
                             Spacer(modifier = Modifier.height(6.dp))
 
                             Text(
-                                text = "Önce ikinci düğmeyle gerçek müziği üretmelisin. Bu aşamaya kadar Eroq müzik kredisi kullanılmaz.",
+                                text = "Önce ikinci düğmeyle seçtiğin motor üzerinden gerçek müziği üretmelisin. Şarkı sözlerini oluşturmak tek başına müzik kredisi kullanmaz.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextMuted
                             )
@@ -879,6 +1025,7 @@ fun ComposeScreen(
                         Spacer(modifier = Modifier.height(14.dp))
 
                         // SAVE SONG
+
                         Button(
                             onClick = {
                                 viewModel.saveGeneratedSong()
@@ -906,6 +1053,7 @@ fun ComposeScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // DOWNLOAD MP3 TO PHONE
+
                         Button(
                             onClick = {
                                 viewModel.downloadGeneratedSong()
