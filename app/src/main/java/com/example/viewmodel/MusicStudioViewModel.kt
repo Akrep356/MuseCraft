@@ -1,4 +1,3 @@
-
 package com.example.viewmodel
 
 import android.app.Application
@@ -14,6 +13,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.audio.AudioSynthesisEngine
 import com.example.audio.UserVoiceRecorder
 import com.example.data.api.ArtistPersonaResult
+import com.example.data.api.BlueMetalMusicService
 import com.example.data.api.EroqMusicService
 import com.example.data.api.GeminiMusicService
 import com.example.data.api.SongGenerationResult
@@ -50,6 +50,11 @@ enum class StudioTab(val title: String) {
     LIBRARY("Kütüphane")
 }
 
+enum class MusicEngine(val title: String) {
+    BLUEMETAL("BlueMetal"),
+    EROQ("Eroq Music One")
+}
+
 class MusicStudioViewModel(application: Application) :
     AndroidViewModel(application) {
 
@@ -57,6 +62,7 @@ class MusicStudioViewModel(application: Application) :
     private val db = AppDatabase.getInstance(application)
     private val geminiService = GeminiMusicService()
     private val eroqService = EroqMusicService()
+    private val blueMetalService = BlueMetalMusicService()
 
     val audioEngine = AudioSynthesisEngine(application)
     val voiceRecorder = UserVoiceRecorder(application)
@@ -97,6 +103,30 @@ class MusicStudioViewModel(application: Application) :
     val composeVocalTone = MutableStateFlow(PresetVocalTones.tones[4])
     val composeKey = MutableStateFlow("A Minör")
     val composeBpm = MutableStateFlow(124)
+
+    // MUSIC ENGINE SELECTION
+    // BlueMetal varsayılan motordur.
+    // Eroq yalnızca kullanıcı manuel seçerse kullanılır.
+
+    private val _selectedMusicEngine =
+        MutableStateFlow(MusicEngine.BLUEMETAL)
+
+    val selectedMusicEngine = _selectedMusicEngine.asStateFlow()
+
+    fun selectMusicEngine(engine: MusicEngine) {
+        if (_isGeneratingSong.value) return
+
+        _selectedMusicEngine.value = engine
+
+        _generationMessage.value =
+            when (engine) {
+                MusicEngine.BLUEMETAL ->
+                    "BlueMetal seçildi. Gerçek müzik üretiminde bu motor kullanılacak."
+
+                MusicEngine.EROQ ->
+                    "Eroq Music One seçildi. Gerçek müzik üretiminde bu motor kullanılacak."
+            }
+    }
 
     private val _isGeneratingSong = MutableStateFlow(false)
     val isGeneratingSong = _isGeneratingSong.asStateFlow()
@@ -241,7 +271,7 @@ class MusicStudioViewModel(application: Application) :
 
                 _generatedSong.value = result
                 _generationMessage.value =
-                    "Şarkı sözleri hazır. Şimdi gerçek müziği üretebilirsin."
+                    "Şarkı sözleri hazır. Motorunu seçip gerçek müziği üretebilirsin."
             } catch (e: Exception) {
                 _generationMessage.value =
                     "Şarkı sözü hazırlama hatası: ${e.message ?: "Bilinmeyen hata"}"
@@ -277,7 +307,9 @@ class MusicStudioViewModel(application: Application) :
         )
     }
 
-    // REAL SONG WITH EROQ
+    // REAL SONG GENERATION
+    // Seçilen motor dışında başka motor kullanılmaz.
+    // Otomatik yedek motora geçiş YOKTUR.
 
     fun generateRealSong() {
         if (_isGeneratingSong.value) return
@@ -296,10 +328,10 @@ class MusicStudioViewModel(application: Application) :
             return
         }
 
+        val selectedEngine = _selectedMusicEngine.value
+
         viewModelScope.launch {
             _isGeneratingSong.value = true
-            _generationMessage.value =
-                "Eroq Music One gerçek müziği üretiyor..."
 
             try {
                 val vocal = composeVocalTone.value
@@ -328,35 +360,73 @@ class MusicStudioViewModel(application: Application) :
                     "${vocal.gender.displayName} vokal, ${vocal.name}, " +
                     "doğal Türkçe telaffuz, ${composeBpm.value} BPM."
 
-                val result = eroqService.generateMusicAndWait(
-                    prompt = prompt,
-                    style = style,
-                    lyrics = lyricsResult.lyrics,
-                    title = lyricsResult.title,
-                    seconds = 60,
-                    instrumental = false
-                )
+                _generationMessage.value =
+                    when (selectedEngine) {
+                        MusicEngine.BLUEMETAL ->
+                            "BlueMetal müzik üretimini başlatıyor..."
 
-                val audioUrl = result.optString("audioUrl", "")
+                        MusicEngine.EROQ ->
+                            "Eroq Music One gerçek müziği üretiyor..."
+                    }
+
+                val audioUrl: String
+                val finalTitle: String
+                val duration: Int
+
+                when (selectedEngine) {
+
+                    MusicEngine.BLUEMETAL -> {
+                        val result = blueMetalService.generateMusicAndWait(
+                            prompt = prompt,
+                            style = style,
+                            lyrics = lyricsResult.lyrics,
+                            title = lyricsResult.title,
+                            instrumental = false
+                        )
+
+                        audioUrl = result.audioUrl
+                        finalTitle = result.title
+                        duration = result.seconds
+                    }
+
+                    MusicEngine.EROQ -> {
+                        val result = eroqService.generateMusicAndWait(
+                            prompt = prompt,
+                            style = style,
+                            lyrics = lyricsResult.lyrics,
+                            title = lyricsResult.title,
+                            seconds = 60,
+                            instrumental = false
+                        )
+
+                        audioUrl = result.optString("audioUrl", "")
+                        finalTitle = result.optString(
+                            "title",
+                            lyricsResult.title
+                        )
+                        duration = result.optInt("seconds", 60)
+                    }
+                }
 
                 require(
                     audioUrl.startsWith("https://") ||
                     audioUrl.startsWith("http://")
                 ) {
-                    "Eroq geçerli MP3 bağlantısı döndürmedi."
+                    "${
+                        selectedEngine.title
+                    } geçerli MP3 bağlantısı döndürmedi."
                 }
 
                 val finalSong = lyricsResult.copy(
-                    title = result.optString("title", lyricsResult.title)
+                    title = finalTitle.ifBlank { lyricsResult.title }
                 )
 
-                val duration = result.optInt("seconds", 60)
-                    .takeIf { it > 0 } ?: 60
+                val validDuration = duration.takeIf { it > 0 }
 
                 val item = createGeneratedSongItem(
                     song = finalSong,
                     audioUrl = audioUrl,
-                    duration = duration
+                    duration = validDuration
                 )
 
                 db.songDao().insertSong(item)
@@ -367,11 +437,11 @@ class MusicStudioViewModel(application: Application) :
                 _activePlayingSong.value = item
 
                 _generationMessage.value =
-                    "Şarkı üretildi ve MuseCraft kütüphanesine otomatik kaydedildi. MP3 henüz telefona indirilmedi."
+                    "${selectedEngine.title} ile müzik üretildi ve MuseCraft kütüphanesine kaydedildi. MP3 henüz telefona indirilmedi."
 
             } catch (e: Exception) {
                 _generationMessage.value =
-                    "Gerçek müzik üretim hatası: ${e.message ?: "Bilinmeyen hata"}"
+                    "${selectedEngine.title} üretim hatası: ${e.message ?: "Bilinmeyen hata"}. Başka motora otomatik geçiş yapılmadı."
             } finally {
                 _isGeneratingSong.value = false
             }
@@ -923,7 +993,7 @@ class MusicStudioViewModel(application: Application) :
 
                 _generatedCover.value = cover
                 _coverMessage.value =
-                    "Cover sözleri ve aranje notu hazır. Eroq kullanılmadı; kredi harcanmadı. Bu bölüm MP3 üretmez."
+                    "Cover sözleri ve aranje notu hazır. Bu bölüm MP3 üretmez."
 
             } catch (e: Exception) {
                 _coverMessage.value =
