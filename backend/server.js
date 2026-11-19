@@ -27,6 +27,8 @@ const GEMINI_MODEL = GEMINI_MODELS[0];
 const GEMINI_API_BASE =
     "https://generativelanguage.googleapis.com/v1beta/models";
 
+const BLUEMETAL_MAX_PROMPT_LENGTH = 2000;
+
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
@@ -367,7 +369,7 @@ async function callGemini(prompt) {
 }
 
 // ========================================
-// BLUEMETAL HELPERS
+// BLUEMETAL PROMPT BUILDER
 // ========================================
 
 function buildBlueMetalPrompt({
@@ -377,39 +379,97 @@ function buildBlueMetalPrompt({
     title,
     instrumental
 }) {
-    const sections = [];
+    const cleanPrompt = String(prompt || "").trim();
+    const cleanStyle = String(style || "").trim();
+    const cleanLyrics = String(lyrics || "").trim();
+    const cleanTitle = String(title || "").trim();
 
-    if (title) {
-        sections.push("Song title: " + title);
-    }
+    const instruction = instrumental
+        ? "Instrumental music. No vocals or singing."
+        : "Sing in Turkish. Use the supplied lyrics exactly as written.";
 
-    if (style) {
-        sections.push("Musical style: " + style);
-    }
+    const lyricsBlock = !instrumental && cleanLyrics
+        ? "Lyrics:\n" + cleanLyrics
+        : "";
 
-    if (prompt) {
-        sections.push("Musical direction: " + prompt);
-    }
+    const baseParts = [
+        instruction,
+        lyricsBlock
+    ].filter(Boolean);
 
-    if (instrumental) {
-        sections.push(
-            "Create an instrumental track without vocals or singing."
+    const basePrompt = baseParts.join("\n\n");
+
+    if (basePrompt.length > BLUEMETAL_MAX_PROMPT_LENGTH) {
+        const availableLyricsLength =
+            BLUEMETAL_MAX_PROMPT_LENGTH -
+            instruction.length -
+            "\n\nLyrics:\n".length;
+
+        const error = new Error(
+            "Şarkı sözleri BlueMetal sınırına sığmıyor. " +
+            "Sözlerin mevcut uzunluğu " +
+            cleanLyrics.length +
+            " karakter. Açıklama ve başlık eklenmeden " +
+            "kullanılabilecek yaklaşık söz alanı " +
+            Math.max(0, availableLyricsLength) +
+            " karakter."
         );
-    } else {
-        sections.push(
-            "Create a complete song with vocals. " +
-            "Use Turkish pronunciation and Turkish lyrics."
+
+        error.code = "BLUEMETAL_LYRICS_TOO_LONG";
+        error.status = 400;
+
+        throw error;
+    }
+
+    let remaining =
+        BLUEMETAL_MAX_PROMPT_LENGTH - basePrompt.length;
+
+    const metadata = [];
+
+    function addMetadata(label, value) {
+        if (!value || remaining <= 0) return;
+
+        const fullLine = `${label}: ${value}`;
+        const separator = metadata.length > 0 ? "\n" : "";
+        const available = remaining - separator.length - label.length - 2;
+
+        if (available <= 0) return;
+
+        const shortenedValue = value.slice(0, available);
+
+        if (!shortenedValue) return;
+
+        const line = `${label}: ${shortenedValue}`;
+
+        metadata.push(line);
+        remaining -= separator.length + line.length;
+    }
+
+    // Öncelik sırası: müzik tarzı, açıklama, başlık.
+    // Şarkı sözleri kesilmez.
+
+    addMetadata("Style", cleanStyle);
+    addMetadata("Direction", cleanPrompt);
+    addMetadata("Title", cleanTitle);
+
+    const metadataText = metadata.join("\n");
+
+    const finalPrompt = metadataText
+        ? `${metadataText}\n\n${basePrompt}`
+        : basePrompt;
+
+    if (finalPrompt.length > BLUEMETAL_MAX_PROMPT_LENGTH) {
+        throw new Error(
+            "BlueMetal prompt uzunluğu güvenli sınırı aştı."
         );
     }
 
-    if (lyrics && !instrumental) {
-        sections.push(
-            "Use these exact lyrics:\n" + lyrics
-        );
-    }
-
-    return sections.join("\n\n").trim();
+    return finalPrompt;
 }
+
+// ========================================
+// BLUEMETAL API REQUEST
+// ========================================
 
 async function blueMetalRequest(path, options = {}) {
     if (!BLUEMETAL_API_KEY) {
@@ -848,22 +908,23 @@ app.post("/api/bluemetal/generate", async (req, res) => {
             });
         }
 
-        const finalPrompt = buildBlueMetalPrompt({
-            prompt: cleanPrompt,
-            style: cleanStyle,
-            lyrics: cleanLyrics,
-            title: cleanTitle,
-            instrumental: isInstrumental
-        });
+        let finalPrompt;
 
-        if (finalPrompt.length > 2000) {
-            return res.status(400).json({
+        try {
+            finalPrompt = buildBlueMetalPrompt({
+                prompt: cleanPrompt,
+                style: cleanStyle,
+                lyrics: cleanLyrics,
+                title: cleanTitle,
+                instrumental: isInstrumental
+            });
+        } catch (promptError) {
+            return res.status(promptError.status || 400).json({
                 ok: false,
-                error:
-                    "BlueMetal prompt sınırı 2000 karakter. " +
-                    "Şarkı sözlerini veya müzik açıklamasını kısaltın.",
-                promptLength: finalPrompt.length,
-                maximumLength: 2000
+                error: promptError.message,
+                code: promptError.code || "BLUEMETAL_PROMPT_ERROR",
+                lyricsLength: cleanLyrics.length,
+                maximumPromptLength: BLUEMETAL_MAX_PROMPT_LENGTH
             });
         }
 
@@ -889,6 +950,8 @@ app.post("/api/bluemetal/generate", async (req, res) => {
 
         console.log("BLUEMETAL MUSIC REQUEST:", {
             promptLength: finalPrompt.length,
+            maximumPromptLength: BLUEMETAL_MAX_PROMPT_LENGTH,
+            lyricsLength: cleanLyrics.length,
             instrumental: isInstrumental
         });
 
@@ -1048,7 +1111,6 @@ app.get("/api/bluemetal/download/:id", async (req, res) => {
             });
         }
 
-        // Güncel üretim durumunu ve MP3 URL'sini al
         const { result } = await blueMetalRequest(
             `/music/generations/${encodeURIComponent(id)}`,
             {
@@ -1058,7 +1120,6 @@ app.get("/api/bluemetal/download/:id", async (req, res) => {
 
         const status = normalizeStatus(result.status);
 
-        // Başarılı üretim durumlarını kontrol et
         if (!["succeeded", "completed", "complete"].includes(status)) {
             return res.status(409).json({
                 ok: false,
@@ -1090,7 +1151,6 @@ app.get("/api/bluemetal/download/:id", async (req, res) => {
 
         console.log("BLUEMETAL DOWNLOAD START:", id);
 
-        // MP3 dosyasını doğrudan Render üzerinden aktar
         const audioResponse = await fetch(audioUrl, {
             method: "GET",
             signal: AbortSignal.timeout(120000)
