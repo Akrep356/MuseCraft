@@ -105,8 +105,9 @@ class MusicStudioViewModel(application: Application) :
     val composeBpm = MutableStateFlow(124)
 
     // MUSIC ENGINE SELECTION
-    // BlueMetal varsayılan motordur.
+    // BlueMetal varsayılan ve öncelikli motordur.
     // Eroq yalnızca kullanıcı manuel seçerse kullanılır.
+    // Otomatik motor geçişi kesinlikle yapılmaz.
 
     private val _selectedMusicEngine =
         MutableStateFlow(MusicEngine.BLUEMETAL)
@@ -121,10 +122,10 @@ class MusicStudioViewModel(application: Application) :
         _generationMessage.value =
             when (engine) {
                 MusicEngine.BLUEMETAL ->
-                    "BlueMetal seçildi. Gerçek müzik üretiminde bu motor kullanılacak."
+                    "BlueMetal seçildi. MP3 üretimi yalnızca sen başlattığında yapılacak."
 
                 MusicEngine.EROQ ->
-                    "Eroq Music One seçildi. Gerçek müzik üretiminde bu motor kullanılacak."
+                    "Eroq Music One manuel olarak seçildi. MP3 üretimi yalnızca sen başlattığında yapılacak."
             }
     }
 
@@ -136,6 +137,12 @@ class MusicStudioViewModel(application: Application) :
 
     private val _generatedSongAudioUrl = MutableStateFlow<String?>(null)
     val generatedSongAudioUrl = _generatedSongAudioUrl.asStateFlow()
+
+    // Gerçek üretim servisinden dönen süre.
+    // Bilinmiyorsa null kalır; uydurma süre kaydedilmez.
+
+    private val _generatedSongDurationSeconds = MutableStateFlow<Int?>(null)
+    val generatedSongDurationSeconds = _generatedSongDurationSeconds.asStateFlow()
 
     private val _generationMessage = MutableStateFlow("")
     val generationMessage = _generationMessage.asStateFlow()
@@ -256,6 +263,7 @@ class MusicStudioViewModel(application: Application) :
 
             generatedSongDatabaseId = null
             _generatedSongAudioUrl.value = null
+            _generatedSongDurationSeconds.value = null
             _generatedSong.value = null
 
             try {
@@ -271,7 +279,7 @@ class MusicStudioViewModel(application: Application) :
 
                 _generatedSong.value = result
                 _generationMessage.value =
-                    "Şarkı sözleri hazır. Motorunu seçip gerçek müziği üretebilirsin."
+                    "Şarkı sözleri hazır. BlueMetal öncelikli motor olarak seçili. Gerçek müzik üretimini sen başlatabilirsin."
             } catch (e: Exception) {
                 _generationMessage.value =
                     "Şarkı sözü hazırlama hatası: ${e.message ?: "Bilinmeyen hata"}"
@@ -308,8 +316,10 @@ class MusicStudioViewModel(application: Application) :
     }
 
     // REAL SONG GENERATION
-    // Seçilen motor dışında başka motor kullanılmaz.
+    // Yalnızca seçilen motor çalışır.
+    // BlueMetal varsayılandır.
     // Otomatik yedek motora geçiş YOKTUR.
+    // Bu fonksiyon yalnızca kullanıcı üretim düğmesine bastığında çağrılır.
 
     fun generateRealSong() {
         if (_isGeneratingSong.value) return
@@ -412,16 +422,14 @@ class MusicStudioViewModel(application: Application) :
                     audioUrl.startsWith("https://") ||
                     audioUrl.startsWith("http://")
                 ) {
-                    "${
-                        selectedEngine.title
-                    } geçerli MP3 bağlantısı döndürmedi."
+                    "${selectedEngine.title} geçerli MP3 bağlantısı döndürmedi."
                 }
+
+                val validDuration = duration.takeIf { it > 0 }
 
                 val finalSong = lyricsResult.copy(
                     title = finalTitle.ifBlank { lyricsResult.title }
                 )
-
-                val validDuration = duration.takeIf { it > 0 }
 
                 val item = createGeneratedSongItem(
                     song = finalSong,
@@ -434,10 +442,16 @@ class MusicStudioViewModel(application: Application) :
                 generatedSongDatabaseId = item.id
                 _generatedSong.value = finalSong
                 _generatedSongAudioUrl.value = audioUrl
+                _generatedSongDurationSeconds.value = validDuration
                 _activePlayingSong.value = item
 
                 _generationMessage.value =
-                    "${selectedEngine.title} ile müzik üretildi ve MuseCraft kütüphanesine kaydedildi. MP3 henüz telefona indirilmedi."
+                    "${selectedEngine.title} ile müzik üretildi ve MuseCraft kütüphanesine kaydedildi. " +
+                    if (validDuration != null) {
+                        "Şarkı süresi: ${validDuration} saniye. MP3 henüz telefona indirilmedi."
+                    } else {
+                        "Servis şarkı süresini bildirmedi. MP3 henüz telefona indirilmedi."
+                    }
 
             } catch (e: Exception) {
                 _generationMessage.value =
@@ -495,7 +509,7 @@ class MusicStudioViewModel(application: Application) :
                     audioUrl = _generatedSongAudioUrl.value,
                     audioFilePath = existing?.audioFilePath,
                     durationSeconds = existing?.durationSeconds
-                        ?: if (_generatedSongAudioUrl.value != null) 60 else null
+                        ?: _generatedSongDurationSeconds.value
                 )
 
                 if (existing != null) {
@@ -550,7 +564,8 @@ class MusicStudioViewModel(application: Application) :
                     song = song,
                     audioUrl = url,
                     id = itemId,
-                    duration = existing?.durationSeconds ?: 60
+                    duration = existing?.durationSeconds
+                        ?: _generatedSongDurationSeconds.value
                 )
 
                 if (existing == null) {
