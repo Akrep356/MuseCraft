@@ -531,99 +531,99 @@ class MusicStudioViewModel(application: Application) :
         }
     }
 
-        // DOWNLOAD GENERATED SONG
+    // DOWNLOAD GENERATED SONG
 
-fun downloadGeneratedSong() {
-    val song = _generatedSong.value ?: run {
-        _downloadMessage.value = "İndirilecek şarkı bulunamadı."
-        return
-    }
+    fun downloadGeneratedSong() {
+        val song = _generatedSong.value ?: run {
+            _downloadMessage.value = "İndirilecek şarkı bulunamadı."
+            return
+        }
 
-    val url = _generatedSongAudioUrl.value
+        val url = _generatedSongAudioUrl.value
 
-    if (url.isNullOrBlank()) {
-        _downloadMessage.value =
-            "Önce gerçek müzik üretmelisin."
-        return
-    }
+        if (url.isNullOrBlank()) {
+            _downloadMessage.value =
+                "Önce gerçek müzik üretmelisin."
+            return
+        }
 
-    if (_downloadingSongId.value != null) return
+        if (_downloadingSongId.value != null) return
 
-    viewModelScope.launch {
-        val itemId = generatedSongDatabaseId
-            ?: UUID.randomUUID().toString()
+        viewModelScope.launch {
+            val itemId = generatedSongDatabaseId
+                ?: UUID.randomUUID().toString()
 
-        _downloadingSongId.value = itemId
-        _downloadProgress.value = 0
-        _downloadMessage.value = "MP3 indiriliyor..."
+            _downloadingSongId.value = itemId
+            _downloadProgress.value = 0
+            _downloadMessage.value = "MP3 indiriliyor..."
 
-        try {
-            val existing = db.songDao().getSongById(itemId)
+            try {
+                val existing = db.songDao().getSongById(itemId)
 
-            // MP3 zaten telefonda kayıtlıysa yeniden indirme.
-            if (isStoredAudioAvailable(existing?.audioFilePath)) {
+                if (isStoredAudioAvailable(existing?.audioFilePath)) {
+                    generatedSongDatabaseId = itemId
+                    _activePlayingSong.value = existing
+
+                    _downloadProgress.value = 100
+                    _downloadMessage.value =
+                        "Bu şarkının MP3 dosyası zaten telefonda kayıtlı."
+
+                    return@launch
+                }
+
+                val savedItem = createGeneratedSongItem(
+                    song = song,
+                    audioUrl = url,
+                    id = itemId,
+                    duration = existing?.durationSeconds
+                        ?: _generatedSongDurationSeconds.value
+                ).copy(
+                    audioFilePath = existing?.audioFilePath
+                )
+
+                if (existing == null) {
+                    db.songDao().insertSong(savedItem)
+                } else {
+                    db.songDao().updateSong(savedItem)
+                }
+
                 generatedSongDatabaseId = itemId
-                _activePlayingSong.value = existing
 
+                val localPath = downloadMp3ToPhone(
+                    url = url,
+                    title = song.title
+                )
+
+                val updatedSong = savedItem.copy(
+                    audioFilePath = localPath
+                )
+
+                db.songDao().updateSong(updatedSong)
+
+                _activePlayingSong.value = updatedSong
                 _downloadProgress.value = 100
                 _downloadMessage.value =
-                    "Bu şarkının MP3 dosyası zaten telefonda kayıtlı."
+                    "MP3 telefona indirildi ve kütüphaneye kaydedildi."
 
-                return@launch
+            } catch (e: Exception) {
+                _downloadMessage.value =
+                    "İndirme hatası: ${e.message ?: "Bilinmeyen hata"}. Mevcut MP3 kayıt yolu korundu."
+            } finally {
+                _downloadingSongId.value = null
             }
-
-            // Mevcut MP3 dosyasının yolunu koru.
-            val savedItem = createGeneratedSongItem(
-                song = song,
-                audioUrl = url,
-                id = itemId,
-                duration = existing?.durationSeconds
-                    ?: _generatedSongDurationSeconds.value
-            ).copy(
-                audioFilePath = existing?.audioFilePath
-            )
-
-            if (existing == null) {
-                db.songDao().insertSong(savedItem)
-            } else {
-                db.songDao().updateSong(savedItem)
-            }
-
-            generatedSongDatabaseId = itemId
-
-            // Yeni MP3 tamamen indirilmeden eski dosya yolu değiştirilmez.
-            val localPath = downloadMp3ToPhone(
-                url = url,
-                title = song.title
-            )
-
-            val updatedSong = savedItem.copy(
-                audioFilePath = localPath
-            )
-
-            db.songDao().updateSong(updatedSong)
-
-            _activePlayingSong.value = updatedSong
-            _downloadProgress.value = 100
-            _downloadMessage.value =
-                "MP3 telefona indirildi ve kütüphaneye kaydedildi."
-
-        } catch (e: Exception) {
-            _downloadMessage.value =
-                "İndirme hatası: ${e.message ?: "Bilinmeyen hata"}. Mevcut MP3 kayıt yolu korundu."
-        } finally {
-            _downloadingSongId.value = null
         }
     }
-}
 
     // IMPORT EXTERNAL MP3 INTO MUSECRAFT
+    // Android 10 ve üzeri: ortak Music/MuseCraft klasörü.
+    // Android 9 ve altı: uygulamanın harici Music klasörü.
 
     fun importAudio(uri: Uri) {
         if (_downloadingSongId.value != null) return
 
         viewModelScope.launch {
             val songId = UUID.randomUUID().toString()
+            var importedUri: Uri? = null
             var importedFile: File? = null
 
             _downloadingSongId.value = songId
@@ -652,30 +652,139 @@ fun downloadGeneratedSong() {
                     .substringBeforeLast(".")
                     .ifBlank { "İçe Aktarılan Şarkı" }
 
-                val musicFolder = File(app.filesDir, "imported_audio")
+                val fileName =
+                    "${safeFileName(title)}_$songId.mp3"
 
-                if (!musicFolder.exists() && !musicFolder.mkdirs()) {
-                    throw IOException("MP3 klasörü oluşturulamadı.")
-                }
-
-                val destination = File(musicFolder, "$songId.mp3")
+                var totalBytes = 0L
+                var savedPath: String? = null
 
                 withContext(Dispatchers.IO) {
                     val input = resolver.openInputStream(uri)
                         ?: throw IOException("MP3 dosyası açılamadı.")
 
                     input.use { source ->
-                        FileOutputStream(destination).use { output ->
-                            source.copyTo(output)
-                        }
-                    }
 
-                    if (!destination.exists() || destination.length() < 1024) {
-                        throw IOException("MP3 dosyası geçersiz veya çok küçük.")
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+
+                            val values = ContentValues().apply {
+                                put(
+                                    MediaStore.Audio.Media.DISPLAY_NAME,
+                                    fileName
+                                )
+                                put(
+                                    MediaStore.Audio.Media.MIME_TYPE,
+                                    "audio/mpeg"
+                                )
+                                put(
+                                    MediaStore.Audio.Media.RELATIVE_PATH,
+                                    "${Environment.DIRECTORY_MUSIC}/MuseCraft"
+                                )
+                                put(MediaStore.Audio.Media.IS_PENDING, 1)
+                            }
+
+                            importedUri = resolver.insert(
+                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                values
+                            ) ?: throw IOException(
+                                "Music/MuseCraft klasöründe dosya oluşturulamadı."
+                            )
+
+                            val output = resolver.openOutputStream(
+                                importedUri!!,
+                                "w"
+                            ) ?: throw IOException("MP3 dosyası yazılamadı.")
+
+                            output.use { destination ->
+                                val buffer = ByteArray(8192)
+
+                                while (true) {
+                                    val count = source.read(buffer)
+                                    if (count == -1) break
+
+                                    destination.write(buffer, 0, count)
+                                    totalBytes += count
+                                }
+
+                                destination.flush()
+                            }
+
+                            if (totalBytes < 1024) {
+                                throw IOException(
+                                    "MP3 dosyası çok küçük veya geçersiz."
+                                )
+                            }
+
+                            val completedValues = ContentValues().apply {
+                                put(MediaStore.Audio.Media.IS_PENDING, 0)
+                            }
+
+                            resolver.update(
+                                importedUri!!,
+                                completedValues,
+                                null,
+                                null
+                            )
+
+                            savedPath = importedUri.toString()
+
+                        } else {
+
+                            val musicFolder = File(
+                                app.getExternalFilesDir(
+                                    Environment.DIRECTORY_MUSIC
+                                ),
+                                "MuseCraft"
+                            )
+
+                            if (!musicFolder.exists() &&
+                                !musicFolder.mkdirs()
+                            ) {
+                                throw IOException(
+                                    "Müzik klasörü oluşturulamadı."
+                                )
+                            }
+
+                            val destination = File(
+                                musicFolder,
+                                fileName
+                            )
+
+                            importedFile = destination
+
+                            FileOutputStream(destination).use { output ->
+                                val buffer = ByteArray(8192)
+
+                                while (true) {
+                                    val count = source.read(buffer)
+                                    if (count == -1) break
+
+                                    output.write(buffer, 0, count)
+                                    totalBytes += count
+                                }
+
+                                output.flush()
+                            }
+
+                            if (totalBytes < 1024) {
+                                throw IOException(
+                                    "MP3 dosyası çok küçük veya geçersiz."
+                                )
+                            }
+
+                            MediaScannerConnection.scanFile(
+                                app,
+                                arrayOf(destination.absolutePath),
+                                arrayOf("audio/mpeg"),
+                                null
+                            )
+
+                            savedPath = destination.absolutePath
+                        }
                     }
                 }
 
-                importedFile = destination
+                val finalPath = savedPath
+                    ?: throw IOException("MP3 kayıt konumu alınamadı.")
 
                 val item = SongItem(
                     id = songId,
@@ -690,7 +799,7 @@ fun downloadGeneratedSong() {
                     vocalGender = "UNKNOWN",
                     isCover = false,
                     audioUrl = null,
-                    audioFilePath = destination.absolutePath,
+                    audioFilePath = finalPath,
                     durationSeconds = null
                 )
 
@@ -699,12 +808,22 @@ fun downloadGeneratedSong() {
                 _activePlayingSong.value = item
                 _downloadProgress.value = 100
                 _downloadMessage.value =
-                    "$title MuseCraft kütüphanesine aktarıldı."
+                    "$title MuseCraft kütüphanesine ve telefonun müzik klasörüne kaydedildi."
 
             } catch (e: Exception) {
+
+                importedUri?.let {
+                    try {
+                        app.contentResolver.delete(it, null, null)
+                    } catch (_: Exception) {
+                    }
+                }
+
                 importedFile?.delete()
+
                 _downloadMessage.value =
                     "MP3 aktarma hatası: ${e.message ?: "Bilinmeyen hata"}"
+
             } finally {
                 _downloadingSongId.value = null
             }
