@@ -1,16 +1,13 @@
-
-name: Build Android APK
+name: Build MuseCraft Signed APK
 
 on:
   push:
-    branches: [ "main", "master" ]
-  pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build Debug APK
+    name: Build Signed Debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -31,6 +28,51 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      - name: Prepare MuseCraft signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -e
+
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "KEYSTORE_BASE64 GitHub Secret bulunamadı."
+            exit 1
+          fi
+
+          if [ -z "$STORE_PASSWORD" ]; then
+            echo "STORE_PASSWORD GitHub Secret bulunamadı."
+            exit 1
+          fi
+
+          if [ -z "$KEY_PASSWORD" ]; then
+            echo "KEY_PASSWORD GitHub Secret bulunamadı."
+            exit 1
+          fi
+
+          KEYSTORE_FILE="$RUNNER_TEMP/MuseCraft-release.jks"
+
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
+
+          if [ ! -s "$KEYSTORE_FILE" ]; then
+            echo "İmza anahtarı oluşturulamadı."
+            exit 1
+          fi
+
+          keytool -list \
+            -keystore "$KEYSTORE_FILE" \
+            -storepass "$STORE_PASSWORD" \
+            -alias musecraft
+
+          {
+            echo "KEYSTORE_PATH=$KEYSTORE_FILE"
+            echo "STORE_PASSWORD=$STORE_PASSWORD"
+            echo "KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+          echo "MuseCraft imza anahtarı hazır."
+
       - name: Increase Gradle download timeout
         run: |
           FILE="gradle/wrapper/gradle-wrapper.properties"
@@ -41,7 +83,7 @@ jobs:
             echo 'networkTimeout=120000' >> "$FILE"
           fi
 
-      - name: Build Debug APK with retries
+      - name: Build Signed Debug APK with retries
         run: |
           for attempt in 1 2 3; do
             echo "APK derleme denemesi: $attempt / 3"
@@ -60,9 +102,10 @@ jobs:
           echo "Üç deneme de başarısız oldu."
           exit 1
 
-      - name: Upload APK Artifact
+      - name: Upload Signed APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MuseCraft-Debug-APK
+          name: MuseCraft-Signed-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
           retention-days: 14
