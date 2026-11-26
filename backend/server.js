@@ -16,6 +16,9 @@ const BLUEMETAL_MAX_PROMPT_LENGTH = 2000;
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
+const MAGIC_HOUR_API_KEY = process.env.MAGIC_HOUR_API_KEY;
+const MAGIC_HOUR_API_URL = "https://api.magichour.ai/v1";
+
 const GEMINI_MODELS = [
     "gemini-3.8-flash",
     "gemini-3.7-flash",
@@ -374,10 +377,6 @@ function buildBlueMetalPrompt({
         throw error;
     }
 
-    // Önce sözleri ve vokal talimatını koruyoruz.
-    // Kalan karakter alanını metadata için kullanıyoruz.
-    // İki satır boşluğu da hesaba katılır.
-
     const finalParts = [basePrompt];
     let remaining =
         BLUEMETAL_MAX_PROMPT_LENGTH - basePrompt.length;
@@ -401,9 +400,6 @@ function buildBlueMetalPrompt({
 
         remaining -= separator.length + line.length;
     }
-
-    // Başlık, tarz ve açıklama sözlerden sonra eklenir.
-    // Sözlerin kendisi hiçbir zaman otomatik kesilmez.
 
     addMetadata("Title", cleanTitle);
     addMetadata("Style", cleanStyle);
@@ -467,6 +463,48 @@ async function blueMetalRequest(path, options = {}) {
 }
 
 // ========================================
+// MAGIC HOUR ACCOUNT REQUEST
+// ========================================
+
+async function magicHourAccountRequest() {
+    if (!MAGIC_HOUR_API_KEY) {
+        const error = new Error(
+            "MAGIC_HOUR_API_KEY Render ortamında tanımlanmamış."
+        );
+        error.status = 500;
+        throw error;
+    }
+
+    const response = await fetch(
+        `${MAGIC_HOUR_API_URL}/account`,
+        {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${MAGIC_HOUR_API_KEY}`,
+                "Accept": "application/json"
+            },
+            signal: AbortSignal.timeout(30000)
+        }
+    );
+
+    const result = await readJsonResponse(response);
+
+    if (!response.ok) {
+        const error = new Error(
+            getErrorMessage(
+                result,
+                `Magic Hour API hatası: HTTP ${response.status}`
+            )
+        );
+
+        error.status = response.status;
+        throw error;
+    }
+
+    return result;
+}
+
+// ========================================
 // SERVER INFORMATION
 // ========================================
 
@@ -477,7 +515,8 @@ app.get("/", (req, res) => {
         engines: {
             music: ["eroq-music-one", "bluemetal"],
             textAI: GEMINI_MODEL,
-            fallbackModels: GEMINI_MODELS
+            fallbackModels: GEMINI_MODELS,
+            video: ["magichour"]
         },
         endpoints: [
             "/health",
@@ -486,7 +525,8 @@ app.get("/", (req, res) => {
             "/api/bluemetal/generate",
             "/api/bluemetal/status/:id",
             "/api/bluemetal/download/:id",
-            "/api/gemini/generate"
+            "/api/gemini/generate",
+            "/api/magichour/account"
         ]
     });
 });
@@ -502,8 +542,41 @@ app.get("/health", (req, res) => {
         eroqConfigured: Boolean(EROQ_API_KEY),
         blueMetalConfigured: Boolean(BLUEMETAL_API_KEY),
         geminiConfigured: Boolean(GEMINI_API_KEY),
+        magicHourConfigured: Boolean(MAGIC_HOUR_API_KEY),
         geminiModels: GEMINI_MODELS
     });
+});
+
+// ========================================
+// MAGIC HOUR ACCOUNT / CREDIT CHECK
+// ========================================
+
+app.get("/api/magichour/account", async (req, res) => {
+    try {
+        const account = await magicHourAccountRequest();
+
+        console.log("MAGIC HOUR ACCOUNT CHECK SUCCESS");
+
+        return res.json({
+            ok: true,
+            provider: "magichour",
+            message: "Hesap ve kredi bilgisi başarıyla alındı.",
+            account
+        });
+
+    } catch (error) {
+        console.error("MAGIC HOUR ACCOUNT CHECK ERROR:", {
+            status: error.status || null,
+            message: error.message
+        });
+
+        return res.status(error.status || 500).json({
+            ok: false,
+            provider: "magichour",
+            error: error.message ||
+                "Magic Hour hesap bilgisi alınamadı."
+        });
+    }
 });
 
 // ========================================
@@ -1176,6 +1249,11 @@ app.listen(PORT, "0.0.0.0", () => {
     console.log(
         "Gemini integration ready:",
         Boolean(GEMINI_API_KEY)
+    );
+
+    console.log(
+        "Magic Hour integration:",
+        Boolean(MAGIC_HOUR_API_KEY)
     );
 
     console.log(
